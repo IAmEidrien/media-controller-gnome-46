@@ -20,6 +20,23 @@
     <value nick="large" value="2"/>
   </enum>
 
+  <enum id="org.gnome.shell.extensions.media-controller.click-action">
+    <value nick="none" value="0"/>
+    <value nick="play-pause" value="1"/>
+    <value nick="play" value="2"/>
+    <value nick="pause" value="3"/>
+    <value nick="next" value="4"/>
+    <value nick="previous" value="5"/>
+    <value nick="volume-up" value="6"/>
+    <value nick="volume-down" value="7"/>
+    <value nick="loop" value="8"/>
+    <value nick="shuffle" value="9"/>
+    <value nick="menu" value="10"/>
+    <value nick="raise" value="11"/>
+    <value nick="quit" value="12"/>
+    <value nick="preferences" value="13"/>
+  </enum>
+
   <schema id="org.gnome.shell.extensions.media-controller"
           path="/org/gnome/shell/extensions/media-controller/">
 
@@ -33,6 +50,25 @@
     <key name="show-previous" type="b">
       <default>true</default>
       <summary>Show the previous button in the panel</summary>
+    </key>
+
+    <key name="left-click-action"
+         enum="org.gnome.shell.extensions.media-controller.click-action">
+      <default>'menu'</default>
+      <summary>Action when left-clicking the panel indicator</summary>
+      <description>Also used for touch input. Does not affect the playback buttons.</description>
+    </key>
+
+    <key name="middle-click-action"
+         enum="org.gnome.shell.extensions.media-controller.click-action">
+      <default>'raise'</default>
+      <summary>Action when middle-clicking the panel indicator</summary>
+    </key>
+
+    <key name="right-click-action"
+         enum="org.gnome.shell.extensions.media-controller.click-action">
+      <default>'play-pause'</default>
+      <summary>Action when right-clicking the panel indicator</summary>
     </key>
 
     <key name="show-play-pause" type="b">
@@ -72,6 +108,12 @@
     <key name="show-player-icon" type="b">
       <default>true</default>
       <summary>Show the player's application icon in the panel</summary>
+    </key>
+
+    <key name="prefer-symbolic-icons" type="b">
+      <default>true</default>
+      <summary>Prefer symbolic player icons in the panel</summary>
+      <description>Use symbolic variants from the current icon theme when available, falling back to the original icon. Only applies while show-player-icon is enabled; does not change artwork or the player switcher.</description>
     </key>
 
     <key name="show-title" type="b">

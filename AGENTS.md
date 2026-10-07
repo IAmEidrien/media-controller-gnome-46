@@ -19,6 +19,12 @@ testing from syntax checks or mocked constructors.
   Shell 46 cannot resolve `-st-accent-color`.
 - Preserve fixed icon/artwork sizing, MPRIS capabilities, player selection,
   seek behavior, timer/signal cleanup, and cancellation of artwork downloads.
+- Panel shortcuts apply to the selected player and must not intercept transport
+  controls. Player-volume shortcuts affect MPRIS Volume, not system volume.
+  Keep the Actions group after Placement in the Panel preferences.
+- Prefer symbolic icons through Shell's icon-theme lookup, preserving the
+  original GIcon as fallback. Keep this preference panel-only, immediately
+  below Player icon, and disable its row while Player icon is off.
 - Gitpulsar Pull updates the installed checkout. Use ordinary fast-forward
   commits on shared main; never force-push. Installation/uninstallation helpers
   must not remove a Git-managed extension checkout.

@@ -45,6 +45,7 @@ const MprisIface = `
     <property name="Identity" type="s" access="read"/>
     <property name="DesktopEntry" type="s" access="read"/>
     <property name="CanRaise" type="b" access="read"/>
+    <property name="CanQuit" type="b" access="read"/>
   </interface>
 </node>`;
 
@@ -69,6 +70,8 @@ const PlayerIface = `
     <property name="Shuffle" type="b" access="readwrite"/>
     <property name="Metadata" type="a{sv}" access="read"/>
     <property name="Position" type="x" access="read"/>
+    <property name="Volume" type="d" access="readwrite"/>
+    <property name="CanControl" type="b" access="read"/>
     <property name="CanPlay" type="b" access="read"/>
     <property name="CanPause" type="b" access="read"/>
     <property name="CanGoNext" type="b" access="read"/>
@@ -235,6 +238,17 @@ export const MprisPlayer = GObject.registerClass({
         return this._playerProxy?.CanPlay ?? true;
     }
 
+    get canControl() {
+        return this._playerProxy?.CanControl ?? true;
+    }
+
+    /** null means volume is not exposed by this player. */
+    get volume() {
+        const volume = this._playerProxy?.Volume;
+        return typeof volume === 'number' && Number.isFinite(volume) && volume >= 0
+            ? volume : null;
+    }
+
     get canPause() {
         return this._playerProxy?.CanPause ?? true;
     }
@@ -275,6 +289,10 @@ export const MprisPlayer = GObject.registerClass({
 
     get canRaise() {
         return this._appProxy?.CanRaise ?? false;
+    }
+
+    get canQuit() {
+        return this._appProxy?.CanQuit ?? false;
     }
 
     get identity() {
@@ -328,7 +346,14 @@ export const MprisPlayer = GObject.registerClass({
     }
 
     playPause() {
+        if (!this.canControl || !(this.isPlaying ? this.canPause : this.canPlay))
+            return;
         this._call('PlayPause');
+    }
+
+    play() {
+        if (this.canControl && this.canPlay)
+            this._call('Play');
     }
 
     /**
@@ -337,17 +362,30 @@ export const MprisPlayer = GObject.registerClass({
      * the wrong outcome when the point is to get out of another player's way.
      */
     pause() {
-        if (!this.canPause)
+        if (!this.canControl || !this.canPause)
             return;
         this._call('Pause');
     }
 
     next() {
-        this._call('Next');
+        if (this.canControl && this.canGoNext)
+            this._call('Next');
     }
 
     previous() {
-        this._call('Previous');
+        if (this.canControl && this.canGoPrevious)
+            this._call('Previous');
+    }
+
+    setVolume(volume) {
+        if (!this._playerProxy || !this.canControl || this.volume === null ||
+            !Number.isFinite(volume))
+            return;
+        try {
+            this._playerProxy.Volume = Math.max(0, Math.min(1, volume));
+        } catch (e) {
+            logError('set Volume failed', e);
+        }
     }
 
     /* Property assignment on a GJS proxy updates the cached value at once and
@@ -381,6 +419,16 @@ export const MprisPlayer = GObject.registerClass({
             this._appProxy.RaiseRemote(() => {});
         } catch (e) {
             logError('Raise failed', e);
+        }
+    }
+
+    quit() {
+        if (!this._appProxy || !this.canQuit)
+            return;
+        try {
+            this._appProxy.QuitRemote(() => {});
+        } catch (e) {
+            logError('Quit failed', e);
         }
     }
 

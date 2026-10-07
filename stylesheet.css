@@ -23,6 +23,16 @@
   font-weight: 500;
 }
 
+/* Use Shell's icon-theme lookup rather than recoloring a full-color bitmap.
+ * Symbolic lookup falls back to the requested icon when no variant exists. */
+.mc-player-icon {
+  -st-icon-style: requested;
+}
+
+.mc-player-icon.mc-player-icon-symbolic {
+  -st-icon-style: symbolic;
+}
+
 .mc-panel-controls {
   spacing: 2px;
 }

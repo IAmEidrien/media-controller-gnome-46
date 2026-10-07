@@ -10,6 +10,7 @@ import {ExtensionPreferences, gettext as _} from
     'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
 import {artCacheDir} from './paths.js';
+import {CLICK_ACTIONS} from './panelActions.js';
 
 /* Enumerating in batches keeps a large cache off the main loop in one gulp. */
 const ENUMERATE_BATCH = 64;
@@ -43,6 +44,16 @@ function artSizeLabels() {
         _('Small'),
         _('Medium'),
         _('Large'),
+    ];
+}
+
+function clickActionLabels() {
+    return [
+        _('Do nothing'), _('Play / pause'), _('Play'), _('Pause'),
+        _('Next track'), _('Previous track'), _('Player volume up'),
+        _('Player volume down'), _('Cycle repeat mode'), _('Toggle shuffle'),
+        _('Open / close menu'), _('Focus player'), _('Quit player'),
+        _('Open preferences'),
     ];
 }
 
@@ -119,6 +130,18 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
             _('Remove the indicator from the panel while no media player is running.')));
         page.add(placement);
 
+        const actions = new Adw.PreferencesGroup({
+            title: _('Actions'),
+            description: _('Click actions for the player icon and track information. Playback buttons keep their own actions. Volume changes affect the selected player, not the system volume.'),
+        });
+        actions.add(this._comboRow(settings, 'left-click-action', _('Left click'),
+            CLICK_ACTIONS, clickActionLabels()));
+        actions.add(this._comboRow(settings, 'middle-click-action', _('Middle click'),
+            CLICK_ACTIONS, clickActionLabels()));
+        actions.add(this._comboRow(settings, 'right-click-action', _('Right click'),
+            CLICK_ACTIONS, clickActionLabels()));
+        page.add(actions);
+
         /* Listed in the order they appear on screen. */
         const buttons = new Adw.PreferencesGroup({
             title: _('Playback controls'),
@@ -146,6 +169,10 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
             description: _('What the indicator shows about the current track.'),
         });
         text.add(this._switchRow(settings, 'show-player-icon', _('Player icon')));
+        text.add(this._bindSensitive(settings, 'show-player-icon',
+            this._switchRow(settings, 'prefer-symbolic-icons',
+                _('Prefer symbolic icons'),
+                _('Use the icon theme’s symbolic player icon when available, otherwise keep its colored icon.'))));
         text.add(this._switchRow(settings, 'show-title', _('Track title')));
         text.add(this._switchRow(settings, 'show-artist', _('Artist')));
         text.add(this._spinRow(settings, 'panel-text-width',

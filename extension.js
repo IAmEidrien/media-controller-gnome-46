@@ -13,6 +13,7 @@ import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import {ArtCache} from './artCache.js';
 import {MediaCard} from './mediaCard.js';
 import {MprisManager} from './mpris.js';
+import {activatePanelAction} from './panelActions.js';
 import {ScrollingLabel} from './scrollingLabel.js';
 import {loopIconName, nextLoopStatus, playPauseIconName, seekOffset,
     setToggleStyle} from './transport.js';
@@ -40,6 +41,10 @@ const PANEL_KEYS = [
     'show-shuffle',
     'show-loop',
     'show-player-icon',
+    'prefer-symbolic-icons',
+    'left-click-action',
+    'middle-click-action',
+    'right-click-action',
     'show-title',
     'show-artist',
     'panel-text-width',
@@ -57,6 +62,7 @@ class MediaIndicator extends PanelMenu.Button {
         super._init(0.5, 'Media Controls');
 
         this._settings = settings;
+        this._extension = extension;
         this._manager = manager;
         this._orderApplied = null;
         this._readSettings();
@@ -137,6 +143,10 @@ class MediaIndicator extends PanelMenu.Button {
             showShuffle: settings.get_boolean('show-shuffle'),
             showLoop: settings.get_boolean('show-loop'),
             showPlayerIcon: settings.get_boolean('show-player-icon'),
+            preferSymbolicIcons: settings.get_boolean('prefer-symbolic-icons'),
+            leftClickAction: settings.get_string('left-click-action'),
+            middleClickAction: settings.get_string('middle-click-action'),
+            rightClickAction: settings.get_string('right-click-action'),
             showTitle: settings.get_boolean('show-title'),
             showArtist: settings.get_boolean('show-artist'),
             textWidth: settings.get_int('panel-text-width'),
@@ -169,18 +179,43 @@ class MediaIndicator extends PanelMenu.Button {
         }
     }
 
-    /* A press anywhere on the indicator opens the card, except on the transport
-     * controls, which do their own job instead. Toggling on press rather than
-     * release matches every other panel menu in the shell. */
+    /* Transport buttons handle their own input; the icon, text and remaining
+     * indicator area run the configured shortcut on press. Touch uses the
+     * primary action, and extra mouse buttons do not open the menu by accident. */
     vfunc_event(event) {
         const type = event.type();
         const isPress = type === Clutter.EventType.BUTTON_PRESS ||
                         type === Clutter.EventType.TOUCH_BEGIN;
 
-        if (isPress && this.menu && !this._isOnControls(event))
-            this.menu.toggle();
+        if (!isPress || !this.menu || this._isOnControls(event))
+            return Clutter.EVENT_PROPAGATE;
 
-        return Clutter.EVENT_PROPAGATE;
+        const button = type === Clutter.EventType.TOUCH_BEGIN
+            ? Clutter.BUTTON_PRIMARY : event.get_button();
+        let action;
+        switch (button) {
+        case Clutter.BUTTON_PRIMARY:
+            action = this._prefs.leftClickAction;
+            break;
+        case Clutter.BUTTON_MIDDLE:
+            action = this._prefs.middleClickAction;
+            break;
+        case Clutter.BUTTON_SECONDARY:
+            action = this._prefs.rightClickAction;
+            break;
+        default:
+            return Clutter.EVENT_PROPAGATE;
+        }
+
+        if (action === 'none')
+            return Clutter.EVENT_PROPAGATE;
+        activatePanelAction(action, this._manager.activePlayer, {
+            toggleMenu: () => this.menu.toggle(),
+            closeMenu: () => this.menu.close(),
+            openPreferences: () => this._extension.openPreferences(),
+            refresh: () => this.sync(),
+        });
+        return Clutter.EVENT_STOP;
     }
 
     /**
@@ -301,6 +336,16 @@ class MediaIndicator extends PanelMenu.Button {
     sync() {
         const player = this._manager.activePlayer;
         const prefs = this._prefs;
+        /* St's symbolic lookup tries the theme's symbolic variants first, then
+         * the original icon. It also reloads icons when the icon theme changes.
+         * Keep this panel-only: artwork and the player switcher stay unchanged. */
+        const symbolicClass = 'mc-player-icon-symbolic';
+        if (prefs.preferSymbolicIcons !== this._playerIcon.has_style_class_name(symbolicClass)) {
+            if (prefs.preferSymbolicIcons)
+                this._playerIcon.add_style_class_name(symbolicClass);
+            else
+                this._playerIcon.remove_style_class_name(symbolicClass);
+        }
         this._card.setPlayer(player);
         /* Only players whose proxy has landed: a tab for one that cannot be
          * controlled yet would do nothing when pressed. */

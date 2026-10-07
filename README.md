@@ -23,7 +23,14 @@ Rhythmbox, mpv, and so on.
 
 - **Panel indicator** showing the player icon, track title and artist, in a
   fixed-width slot so it does not resize as tracks change.
-- **Scrolling text**, off by default: text too wide for that slot loops past it
+- **Symbolic player icons** in the panel when the icon theme supplies them,
+  falling back to the original icon. The preference sits below Player icon.
+- **Configurable click actions** for left, middle and right clicks on the
+  indicator. Defaults: left opens the menu, middle focuses the selected player,
+  right toggles play/pause. The Panel page's Actions group follows Placement;
+  playback buttons keep their own actions. Other choices include play, pause,
+  next/previous, player volume up/down, repeat, shuffle, quit and preferences.
+- **Scrolling text**, on by default: text too wide for that slot loops past it
   carousel-style instead of being ellipsized.
 - **Playback controls** in the panel: previous, skip backward, play/pause, skip
   forward, next, plus optional shuffle and loop buttons. Each button can be
@@ -110,14 +117,18 @@ in on Wayland, because the shell caches ES modules for the life of the process.
 
 | Setting                                           | Default         | Description                                             |
 | ------------------------------------------------- | --------------- | ------------------------------------------------------- |
-| `panel-position`                                  | `right`         | `far-left`, `left`, `center`, `right`, `far-right`      |
+| `panel-position`                                  | `left`          | `far-left`, `left`, `center`, `right`, `far-right`      |
+| `left-click-action`                               | `menu`          | Open or close the menu                                  |
+| `middle-click-action`                             | `raise`         | Focus the selected player's application                 |
+| `right-click-action`                              | `play-pause`    | Toggle playback                                         |
 | `show-previous` / `show-play-pause` / `show-next` | on              | Panel transport buttons                                 |
 | `show-seek-backward` / `show-seek-forward`        | off             | Panel skip buttons                                      |
 | `show-shuffle` / `show-loop`                      | off             | Panel shuffle and loop buttons                          |
 | `show-player-icon`                                | on              | Application icon in the panel                           |
-| `show-title` / `show-artist`                      | on / off        | Panel text                                              |
+| `prefer-symbolic-icons`                           | on              | Prefer a symbolic variant; disabled while Player icon is off |
+| `show-title` / `show-artist`                      | on / on         | Panel text                                              |
 | `panel-text-width`                                | 300             | Width of the panel text, in pixels                      |
-| `scroll-text`                                     | off             | Scroll text wider than that, rather than ellipsizing it |
+| `scroll-text`                                     | on              | Scroll text wider than that, rather than ellipsizing it |
 | `scroll-direction`                                | `left-to-right` | `left-to-right` or `right-to-left`                      |
 | `scroll-speed`                                    | 30              | Scrolling speed, in pixels per second                   |
 | `controls-on-left`                                | off             | Put the buttons before the text                         |
@@ -136,6 +147,7 @@ in on Wayland, because the shell caches ES modules for the life of the process.
 | File                                           | Purpose                                     |
 | ---------------------------------------------- | ------------------------------------------- |
 | [extension.js](extension.js)           | Panel indicator, menu, panel placement      |
+| [panelActions.js](panelActions.js)     | Configurable panel shortcuts and capability checks |
 | [mediaCard.js](mediaCard.js)           | The now-playing card                        |
 | [scrollingLabel.js](scrollingLabel.js) | The fixed-width panel label and its marquee |
 | [mpris.js](mpris.js)                   | MPRIS2 D-Bus client and player tracking     |
