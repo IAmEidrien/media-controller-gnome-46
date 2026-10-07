@@ -71,6 +71,20 @@
       <summary>Action when right-clicking the panel indicator</summary>
     </key>
 
+    <key name="scroll-up-action"
+         enum="org.gnome.shell.extensions.media-controller.click-action">
+      <default>'volume-up'</default>
+      <summary>Action when scrolling up on the panel indicator</summary>
+      <description>Uses the same actions as panel clicks. Volume actions affect the selected player's volume in 5 percentage point steps, not system volume.</description>
+    </key>
+
+    <key name="scroll-down-action"
+         enum="org.gnome.shell.extensions.media-controller.click-action">
+      <default>'volume-down'</default>
+      <summary>Action when scrolling down on the panel indicator</summary>
+      <description>Uses the same actions as panel clicks. Vertical smooth scrolling is accumulated into whole steps.</description>
+    </key>
+
     <key name="show-play-pause" type="b">
       <default>true</default>
       <summary>Show the play/pause button in the panel</summary>

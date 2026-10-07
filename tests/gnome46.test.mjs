@@ -127,7 +127,8 @@ function fixture() {
         St: {Widget: Actor, BoxLayout, Button: Actor, Icon: Actor, Label: Actor,
             Settings: {get: () => ({enable_animations: false})}},
         Clutter: {ActorAlign: {CENTER: 0, START: 1, END: 2},
-            EventType: {BUTTON_PRESS: 1, TOUCH_BEGIN: 2, BUTTON_RELEASE: 3},
+            EventType: {BUTTON_PRESS: 1, TOUCH_BEGIN: 2, BUTTON_RELEASE: 3, SCROLL: 4},
+            ScrollDirection: {UP: 0, DOWN: 1, LEFT: 2, RIGHT: 3, SMOOTH: 4},
             BUTTON_PRIMARY: 1, BUTTON_MIDDLE: 2, BUTTON_SECONDARY: 3,
             EVENT_PROPAGATE: 0, EVENT_STOP: 1,
             FixedLayout: class {}, AnimationMode: {LINEAR: 0}},
@@ -267,14 +268,17 @@ test('Panel preferences order, schema choices and dependent symbolic switch stay
     assert.deepEqual(panel.children.map(group => group.title),
         ['Placement', 'Actions', 'Playback controls', 'Track information', 'Scrolling text']);
     const actions = panel.children[1];
-    assert.deepEqual(actions.children.map(row => row.title), ['Left click', 'Middle click', 'Right click']);
+    assert.deepEqual(actions.children.map(row => row.title),
+        ['Left click', 'Middle click', 'Right click', 'Scroll up', 'Scroll down']);
     assert.deepEqual(actions.children.map(row => row.model[row.selected]),
-        ['Open / close menu', 'Focus player', 'Play / pause']);
+        ['Open / close menu', 'Focus player', 'Play / pause', 'Player volume up', 'Player volume down']);
     const schema = readFileSync(new URL('schemas/org.gnome.shell.extensions.media-controller.gschema.xml', root), 'utf8');
     const enumXml = schema.match(/<enum id="[^\"]+\.click-action">([\s\S]*?)<\/enum>/)[1];
     const nicks = [...enumXml.matchAll(/nick="([^\"]+)"/g)].map(match => match[1]);
     assert.deepEqual(nicks, Array.from(f.api.CLICK_ACTIONS));
     assert.equal(actions.children[0].model.length, nicks.length);
+    for (const row of actions.children)
+        assert.deepEqual(row.model, actions.children[0].model, 'scroll and clicks offer identical actions');
     actions.children[0].selected = nicks.indexOf('previous');
     actions.children[0].emit('notify::selected');
     assert.equal(f.settings.get_string('left-click-action'), 'previous');
@@ -321,6 +325,87 @@ test('symbolic preference changes only the panel icon style, retaining its real 
     const css = readFileSync(new URL('stylesheet.css', root), 'utf8');
     assert.match(css, /\.mc-player-icon\s*\{\s*-st-icon-style: requested;/);
     assert.match(css, /\.mc-player-icon\.mc-player-icon-symbolic\s*\{\s*-st-icon-style: symbolic;/);
+});
+
+test('wheel shortcuts change selected-player volume and accept live remapping without opening the menu', () => {
+    const f = fixture();
+    f.indicator._card.setPlayer = () => {};
+    f.indicator._card.setPlayers = () => {};
+    const writes = [];
+    const player = {
+        canControl: true, volume: 0.5, appIcon: {},
+        setVolume(value) { this.volume = value; writes.push(value); },
+    };
+    f.manager.activePlayer = player;
+    const {UP, DOWN, LEFT, RIGHT} = f.api.Clutter.ScrollDirection;
+    const wheel = direction => ({
+        type: () => f.api.Clutter.EventType.SCROLL,
+        get_scroll_direction: () => direction,
+        // Deliberately over a transport button: scrolling applies throughout.
+        get_coords: () => [120, 10],
+    });
+    assert.equal(f.indicator.vfunc_event(wheel(UP)), f.api.Clutter.EVENT_STOP);
+    assert.equal(player.volume, 0.55);
+    f.indicator.vfunc_event(wheel(DOWN));
+    assert.equal(player.volume, 0.5);
+    assert.equal(f.indicator.menu.isOpen, false);
+    for (const direction of [LEFT, RIGHT])
+        assert.equal(f.indicator.vfunc_event(wheel(direction)), f.api.Clutter.EVENT_PROPAGATE);
+    assert.deepEqual(writes, [0.55, 0.5]);
+    f.settings.set_string('scroll-up-action', 'preferences');
+    f.indicator.vfunc_event(wheel(UP));
+    assert.equal(f.preferencesOpened(), 1);
+    f.settings.set_string('scroll-down-action', 'menu');
+    f.indicator.vfunc_event(wheel(DOWN));
+    assert.equal(f.indicator.menu.isOpen, true);
+    f.settings.set_string('scroll-up-action', 'none');
+    assert.equal(f.indicator.vfunc_event(wheel(UP)), f.api.Clutter.EVENT_PROPAGATE);
+    assert.equal(f.preferencesOpened(), 1);
+    f.settings.set_string('scroll-down-action', 'volume-down');
+    f.manager.activePlayer = null;
+    assert.doesNotThrow(() => f.indicator.vfunc_event(wheel(DOWN)));
+});
+
+test('smooth vertical scrolling counts whole steps and drops partial input on leave, remapping or player changes', () => {
+    const f = fixture();
+    f.indicator._card.setPlayer = () => {};
+    f.indicator._card.setPlayers = () => {};
+    f.settings.set_string('scroll-up-action', 'preferences');
+    f.settings.set_string('scroll-down-action', 'preferences');
+    const smooth = (dy, dx = 0) => f.indicator.vfunc_event({
+        type: () => f.api.Clutter.EventType.SCROLL,
+        get_scroll_direction: () => f.api.Clutter.ScrollDirection.SMOOTH,
+        get_scroll_delta: () => [dx, dy],
+    });
+    smooth(-0.5);
+    assert.equal(f.preferencesOpened(), 0, 'fractional packets do not each run a shortcut');
+    smooth(-0.5);
+    assert.equal(f.preferencesOpened(), 1, 'one whole vertical step runs it once');
+    smooth(2);
+    assert.equal(f.preferencesOpened(), 3, 'multiple whole steps are preserved');
+    for (const [dy, dx] of [[0, 1], [0.1, 1], [NaN, 0], [Infinity, 0]])
+        assert.equal(smooth(dy, dx), f.api.Clutter.EVENT_PROPAGATE);
+    assert.equal(f.preferencesOpened(), 3);
+    smooth(-0.75);
+    f.indicator.emit('leave-event');
+    smooth(-0.25);
+    assert.equal(f.preferencesOpened(), 3, 'leaving discards the previous partial step');
+    smooth(0.75);
+    assert.equal(f.preferencesOpened(), 3, 'reversing direction discards opposite remainder');
+    f.manager.activePlayer = {};
+    smooth(0.25);
+    assert.equal(f.preferencesOpened(), 3, 'another player starts with no carried input');
+    smooth(0.5);
+    f.settings.set_string('scroll-down-action', 'none');
+    assert.equal(smooth(1), f.api.Clutter.EVENT_PROPAGATE);
+    f.settings.set_string('scroll-down-action', 'preferences');
+    smooth(0.25);
+    assert.equal(f.preferencesOpened(), 3, 'changing actions clears accumulated input');
+    smooth(0.75);
+    assert.equal(f.preferencesOpened(), 4);
+    for (let i = 0; i < 10; i++)
+        smooth(-0.1);
+    assert.equal(f.preferencesOpened(), 5, 'fractional wheel packets do not lose a tick to rounding');
 });
 
 test('large fallback app icons retain fixed artwork and panel sizes', () => {

@@ -132,13 +132,17 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
 
         const actions = new Adw.PreferencesGroup({
             title: _('Actions'),
-            description: _('Click actions for the player icon and track information. Playback buttons keep their own actions. Volume changes affect the selected player, not the system volume.'),
+            description: _('Click the player icon or track information, or scroll anywhere on the indicator. Playback buttons keep their own click actions. Volume changes affect the selected player, not the system volume.'),
         });
         actions.add(this._comboRow(settings, 'left-click-action', _('Left click'),
             CLICK_ACTIONS, clickActionLabels()));
         actions.add(this._comboRow(settings, 'middle-click-action', _('Middle click'),
             CLICK_ACTIONS, clickActionLabels()));
         actions.add(this._comboRow(settings, 'right-click-action', _('Right click'),
+            CLICK_ACTIONS, clickActionLabels()));
+        actions.add(this._comboRow(settings, 'scroll-up-action', _('Scroll up'),
+            CLICK_ACTIONS, clickActionLabels()));
+        actions.add(this._comboRow(settings, 'scroll-down-action', _('Scroll down'),
             CLICK_ACTIONS, clickActionLabels()));
         page.add(actions);
 

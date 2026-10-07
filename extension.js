@@ -45,6 +45,8 @@ const PANEL_KEYS = [
     'left-click-action',
     'middle-click-action',
     'right-click-action',
+    'scroll-up-action',
+    'scroll-down-action',
     'show-title',
     'show-artist',
     'panel-text-width',
@@ -66,6 +68,10 @@ class MediaIndicator extends PanelMenu.Button {
         this._manager = manager;
         this._orderApplied = null;
         this._readSettings();
+        this.connect('leave-event', () => {
+            this._scrollDelta = 0;
+            return Clutter.EVENT_PROPAGATE;
+        });
 
         this.add_style_class_name('mc-panel-button');
 
@@ -134,6 +140,7 @@ class MediaIndicator extends PanelMenu.Button {
      */
     _readSettings() {
         const settings = this._settings;
+        this._scrollDelta = 0;
         this._prefs = {
             showPrevious: settings.get_boolean('show-previous'),
             showPlayPause: settings.get_boolean('show-play-pause'),
@@ -147,6 +154,8 @@ class MediaIndicator extends PanelMenu.Button {
             leftClickAction: settings.get_string('left-click-action'),
             middleClickAction: settings.get_string('middle-click-action'),
             rightClickAction: settings.get_string('right-click-action'),
+            scrollUpAction: settings.get_string('scroll-up-action'),
+            scrollDownAction: settings.get_string('scroll-down-action'),
             showTitle: settings.get_boolean('show-title'),
             showArtist: settings.get_boolean('show-artist'),
             textWidth: settings.get_int('panel-text-width'),
@@ -184,6 +193,8 @@ class MediaIndicator extends PanelMenu.Button {
      * primary action, and extra mouse buttons do not open the menu by accident. */
     vfunc_event(event) {
         const type = event.type();
+        if (type === Clutter.EventType.SCROLL)
+            return this._onScroll(event);
         const isPress = type === Clutter.EventType.BUTTON_PRESS ||
                         type === Clutter.EventType.TOUCH_BEGIN;
 
@@ -207,6 +218,10 @@ class MediaIndicator extends PanelMenu.Button {
             return Clutter.EVENT_PROPAGATE;
         }
 
+        return this._activateAction(action);
+    }
+
+    _activateAction(action) {
         if (action === 'none')
             return Clutter.EVENT_PROPAGATE;
         activatePanelAction(action, this._manager.activePlayer, {
@@ -215,6 +230,50 @@ class MediaIndicator extends PanelMenu.Button {
             openPreferences: () => this._extension.openPreferences(),
             refresh: () => this.sync(),
         });
+        return Clutter.EVENT_STOP;
+    }
+
+    /* Scroll anywhere on the indicator, including over playback buttons.
+     * Smooth wheels/trackpads emit fractions of a tick: accumulate them rather
+     * than changing volume by 5% for every tiny packet. No timer is needed. */
+    _onScroll(event) {
+        let delta;
+        switch (event.get_scroll_direction()) {
+        case Clutter.ScrollDirection.UP:
+            delta = -1;
+            break;
+        case Clutter.ScrollDirection.DOWN:
+            delta = 1;
+            break;
+        case Clutter.ScrollDirection.SMOOTH: {
+            const [dx, dy] = event.get_scroll_delta();
+            if (!Number.isFinite(dy) || dy === 0 || Math.abs(dx) > Math.abs(dy))
+                return Clutter.EVENT_PROPAGATE;
+            delta = dy;
+            break;
+        }
+        default:
+            return Clutter.EVENT_PROPAGATE;
+        }
+
+        const player = this._manager.activePlayer;
+        if (player !== this._scrollPlayer) {
+            this._scrollPlayer = player;
+            this._scrollDelta = 0;
+        }
+        const action = delta < 0 ? this._prefs.scrollUpAction : this._prefs.scrollDownAction;
+        if (action === 'none') {
+            this._scrollDelta = 0;
+            return Clutter.EVENT_PROPAGATE;
+        }
+        if (Math.sign(delta) !== Math.sign(this._scrollDelta))
+            this._scrollDelta = 0;
+        this._scrollDelta += delta;
+        // Floating-point fractions can sum to 0.9999999999999999 for one tick.
+        const steps = Math.trunc(this._scrollDelta + Math.sign(this._scrollDelta) * 1e-6);
+        this._scrollDelta -= steps;
+        for (let i = 0; i < Math.abs(steps); i++)
+            this._activateAction(action);
         return Clutter.EVENT_STOP;
     }
 

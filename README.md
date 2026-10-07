@@ -30,6 +30,10 @@ Rhythmbox, mpv, and so on.
   right toggles play/pause. The Panel page's Actions group follows Placement;
   playback buttons keep their own actions. Other choices include play, pause,
   next/previous, player volume up/down, repeat, shuffle, quit and preferences.
+- **Scroll shortcuts** anywhere on the panel indicator, defaulting to player
+  volume up/down in 5 percentage point steps. Scroll up/down selectors follow
+  the click selectors in Actions and offer the same choices. Smooth vertical
+  scrolling is accumulated into whole steps; horizontal scrolling is ignored.
 - **Scrolling text**, on by default: text too wide for that slot loops past it
   carousel-style instead of being ellipsized.
 - **Playback controls** in the panel: previous, skip backward, play/pause, skip
@@ -121,6 +125,8 @@ in on Wayland, because the shell caches ES modules for the life of the process.
 | `left-click-action`                               | `menu`          | Open or close the menu                                  |
 | `middle-click-action`                             | `raise`         | Focus the selected player's application                 |
 | `right-click-action`                              | `play-pause`    | Toggle playback                                         |
+| `scroll-up-action`                                | `volume-up`     | Increase selected-player volume                         |
+| `scroll-down-action`                              | `volume-down`   | Decrease selected-player volume                         |
 | `show-previous` / `show-play-pause` / `show-next` | on              | Panel transport buttons                                 |
 | `show-seek-backward` / `show-seek-forward`        | off             | Panel skip buttons                                      |
 | `show-shuffle` / `show-loop`                      | off             | Panel shuffle and loop buttons                          |

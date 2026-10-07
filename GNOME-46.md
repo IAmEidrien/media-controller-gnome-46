@@ -23,9 +23,10 @@ packaging and check targets were adjusted. Relative module imports need no
 change. The root can now be cloned directly into GNOME's extension directory;
 see the README. A separate UUID prevents replacement by the upstream extension.
 
-The schema ID and path are unchanged. Version `2.4-gnome46.2` adds panel click
-actions and a symbolic-icon preference: **run `make schemas` after pulling this
-update**, then log out and back in. Compile again whenever the XML changes; do
+The schema ID and path are unchanged. Version `2.4-gnome46.2` added panel click
+actions and a symbolic-icon preference; `2.4-gnome46.3` adds scroll actions.
+**Run `make schemas` after pulling this update**, then log out and back in.
+Compile again whenever the XML changes; do
 not commit the compiled binary. JavaScript/CSS-only updates need no build.
 
 ## Panel conveniences
@@ -41,6 +42,13 @@ right/play-pause. Touch uses the left-click action. Transport buttons retain
 their own behavior; extra mouse buttons and releases trigger no shortcuts.
 Player actions use the selected player and respect its MPRIS capabilities.
 
+Scroll up and Scroll down appear after the three click selectors, with the
+same action choices and defaults of player volume up/down. Scrolling applies
+anywhere on the panel indicator, including over transport buttons. Vertical
+smooth input accumulates into whole steps, and horizontal input is ignored.
+Partial input is cleared when the pointer leaves, direction reverses, the
+selected player changes, or preferences change. No additional timers are used.
+
 **Prefer symbolic icons** is directly below Player icon and is disabled when
 Player icon is off. It defaults on, using the same `-st-icon-style: symbolic`
 lookup as Media Controls. GNOME tries symbolic variants before the original
@@ -55,8 +63,9 @@ and [texture cache](https://github.com/GNOME/gnome-shell/blob/46.0/src/st/st-tex
 `make check` checks JavaScript syntax, schema XML, metadata, and constructs the
 actual panel/card/preferences code with GNOME 46 compatibility mocks. Those
 mocks deliberately omit St.BoxLayout's newer orientation property and
-Adw.ButtonRow. They also check click-action routing, capability guards, MPRIS
-method/property writes, preference bindings, and fixed artwork sizing. Native
+Adw.ButtonRow. They also check click/scroll routing, smooth-scroll accumulation,
+capability guards, MPRIS method/property writes, preference bindings, and fixed
+artwork sizing. Native
 icon-theme lookup and recoloring are not simulated.
 `make pack` produces a ZIP with a flat, installable extension root.
 
