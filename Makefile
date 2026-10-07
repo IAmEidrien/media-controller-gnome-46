@@ -10,7 +10,7 @@ SHEXLI_VENV = .shexli-venv
 SOURCES = $(wildcard *.js) metadata.json stylesheet.css LICENSE
 SCHEMAS = $(wildcard schemas/*.gschema.xml)
 
-.PHONY: all schemas install uninstall enable disable pack check test shexli clean-shexli logs prefs clean
+.PHONY: all schemas install uninstall enable disable pack check test watch-updates unwatch-updates shexli clean-shexli logs prefs clean
 
 all: schemas
 
@@ -53,6 +53,14 @@ check: test
 
 test:
 	node --test tests/*.test.mjs
+	python3 -m unittest discover -s tests -p '*_test.py'
+
+# Optional, per-user Git checkout watcher. No root privileges or forced logout.
+watch-updates:
+	python3 tools/update_helper.py install
+
+unwatch-updates:
+	python3 tools/update_helper.py uninstall
 
 # Static analysis for extensions.gnome.org packaging and review issues. Runs
 # against a freshly packed zip — the actual submission artifact.

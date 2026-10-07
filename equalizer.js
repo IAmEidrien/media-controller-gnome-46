@@ -53,6 +53,11 @@ class Equalizer extends St.BoxLayout {
         this.connect('destroy', () => this._stop());
     }
 
+    setAccentColor(color) {
+        for (const bar of this._bars)
+            bar.set_style(`background-color: ${color};`);
+    }
+
     /** The card is on screen. */
     setActive(active) {
         if (active === this._active)

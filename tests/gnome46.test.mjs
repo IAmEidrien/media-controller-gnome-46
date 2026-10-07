@@ -422,3 +422,54 @@ test('large fallback app icons retain fixed artwork and panel sizes', () => {
     assert.equal(card._artFallback.icon_size, 56);
     assert.match(card._artButton.style, /width: 120px; height: 120px;/);
 });
+
+test('live accents reach panel/card modes without replacing artwork or coloring ordinary icons', () => {
+    const f = fixture();
+    const player = Object.assign(new Signals(), {
+        title: 'Track', artist: 'Artist', album: '', appIcon: {}, hasAppIcon: true,
+        artUrl: null, length: 60_000_000, identity: 'Player', isPlaying: false,
+        canPlay: true, canRaise: true, canSeek: true, canShuffle: true, canLoop: true,
+        shuffle: true, loopStatus: 'Playlist', getPosition: async () => 1_000_000,
+    });
+    f.manager.activePlayer = player;
+    f.indicator.sync();
+    const card = f.indicator._card;
+    card._artPath = '/tmp/cover art.png';
+    card._artButton.hover = true;
+    f.indicator.setAccentColor('rgba(224, 27, 36, 1)');
+    for (const mode of [f.indicator._shuffleButton, f.indicator._loopButton,
+        card._shuffleButton, card._loopButton]) {
+        assert.equal(mode.child.style, 'color: rgba(224, 27, 36, 1);');
+        assert.ok(mode.classes.has('mc-mode-on'));
+    }
+    assert.equal(card._positionLabel.style, 'color: rgba(224, 27, 36, 1);');
+    assert.equal(card._remainingLabel.style, card._positionLabel.style);
+    assert.match(card._slider.style, /-barlevel-active-background-color: rgba\(224, 27, 36, 1\)/);
+    assert.ok(card._equalizer._bars.every(bar =>
+        bar.style === 'background-color: rgba(224, 27, 36, 1);'));
+    const geometry = /width: 88px; height: 88px; border-radius: 16px;/;
+    assert.match(card._artButton.style, geometry);
+    assert.match(card._artButton.style, /background-image: url\("\/tmp\/cover art.png"\)/);
+    assert.match(card._artButton.style, /border-color: rgba\(224, 27, 36, 1\)/);
+    f.indicator.setAccentColor('rgba(145, 65, 172, 1)');
+    assert.equal(card._loopButton.child.style, 'color: rgba(145, 65, 172, 1);');
+    assert.match(card._artButton.style, geometry);
+    assert.equal(f.indicator._playerIcon.style, undefined);
+    assert.equal(card._playButton.child.style, undefined);
+    card._artButton.hover = false;
+    card._artButton.emit('notify::hover');
+    assert.doesNotMatch(card._artButton.style, /border-color/);
+    card._artButton.emit('key-focus-in');
+    assert.match(card._artButton.style, /border-color/);
+    player.canRaise = false;
+    player.shuffle = false;
+    player.loopStatus = 'None';
+    player.emit('changed');
+    f.indicator.sync();
+    assert.doesNotMatch(card._artButton.style, /border-color/);
+    for (const mode of [f.indicator._shuffleButton, f.indicator._loopButton,
+        card._shuffleButton, card._loopButton]) {
+        assert.equal(mode.child.style, null);
+        assert.ok(!mode.classes.has('mc-mode-on'));
+    }
+});

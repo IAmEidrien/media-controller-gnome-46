@@ -1,10 +1,20 @@
 # Media Controller — GNOME 46 fork
 
-Personal GNOME 46 compatibility fork of
+Maintainer's own space: [HUMANS.md](HUMANS.md), reserved for Eidrien's writing.
+
+GNOME 46 compatibility and convenience fork of
 [naimur900/media-controller-gnome](https://github.com/naimur900/media-controller-gnome),
 based on upstream commit `0d7caf2` (2.4). The formal GitHub fork relationship and
 upstream history are retained. This fork has its own UUID and only declares
 GNOME 46 support. The upstream release targets GNOME 47–50.
+
+Directed and used by Eidrien on a daily GNOME 46 desktop, with OpenAI Codex
+assistance for implementation, investigation and automated checks. The fork
+adds Media Controls-style click/scroll actions and symbolic icons, theme accents,
+and optional maintenance helpers. Native desktop validation and automated
+validation are distinguished in [GNOME-46.md](GNOME-46.md); the Git history
+records the changes. The maintainer's note is kept separate from this technical
+README so it can remain entirely in their own words.
 
 The extension files live at the repository root for direct Gitpulsar updates.
 See [GNOME-46.md](GNOME-46.md) for the compatibility changes and validation limits.
@@ -58,9 +68,15 @@ Rhythmbox, mpv, and so on.
   left alone, and the whole behavior can be switched off.
 - **Shuffle and loop** control the player directly: shuffle toggles on and off,
   loop cycles between off, repeating the whole queue, and repeating one track,
-  and an engaged mode lights up in Adwaita blue.
+  and an engaged mode uses the Shell theme's accent color.
 - **Configurable panel position**: far left, left, center, right, or far right.
-- Uses Shell media-button and slider styles, with Adwaita blue for custom accent elements.
+- **Theme accents on GNOME 46**: follow the themed slider color, with Adwaita
+  blue as fallback and an optional Shell CSS override.
+- **Optional Git update helper**: compile schema changes and offer a logout
+  confirmation after Pull. The extension works independently of the helper.
+- **Guarded upstream syncing**: scheduled merges reach `main` only after the
+  fork's compatibility guards and automated checks pass.
+- Uses Shell media-button and slider styles.
 
 Skip buttons only appear for players that support seeking; shuffle and loop
 only for players that expose them over MPRIS.
@@ -94,6 +110,12 @@ gnome-extensions enable media-controller-gnome-46@eidrien.local
 Open this checkout in Gitpulsar. For future updates, **Pull**, then log out and
 back in. Run `make schemas` after a schema XML change. No full build is needed
 for JavaScript or stylesheet updates. Keep personal settings outside Git.
+
+For automatic local schema compilation and update notifications, run
+`make watch-updates` once from the installed checkout. This optional user service
+does not pull updates or log you out automatically. See [MAINTENANCE.md](MAINTENANCE.md)
+for setup/removal, GitHub's upstream-sync schedule and its limits, and theme CSS
+examples.
 
 For a separate source checkout, `make install` copies the runtime files. It
 refuses to overwrite a Git-managed installation. `make uninstall` also refuses
@@ -153,6 +175,7 @@ in on Wayland, because the shell caches ES modules for the life of the process.
 | File                                           | Purpose                                     |
 | ---------------------------------------------- | ------------------------------------------- |
 | [extension.js](extension.js)           | Panel indicator, menu, panel placement      |
+| [accentColor.js](accentColor.js)       | GNOME 46 theme color lookup and refresh     |
 | [panelActions.js](panelActions.js)     | Configurable panel shortcuts and capability checks |
 | [mediaCard.js](mediaCard.js)           | The now-playing card                        |
 | [scrollingLabel.js](scrollingLabel.js) | The fixed-width panel label and its marquee |

@@ -7,7 +7,7 @@ leave these incompatibilities:
 | --- | --- |
 | `St.BoxLayout.orientation` | Use the supported `vertical` boolean in the panel, card, scrolling label and equalizer. |
 | `Adw.ButtonRow` (libadwaita 1.6) | Use `Adw.ActionRow` with an activatable `Gtk.Button`, retaining confirmation dialogs. |
-| `-st-accent-color` (newer Shell) | Use Adwaita blue `#3584e4` for the extension's custom accent elements. The seek slider still follows the Shell theme. |
+| `-st-accent-color` (newer Shell) | Read the Shell theme's native slider fill through `St.ThemeNode`, with an optional CSS override and Adwaita blue fallback. |
 
 `Adw.AlertDialog`, `SwitchRow` and `SpinRow` are available in libadwaita 1.5.
 The GioUnix import needs GLib 2.80, which is supplied by Mint 22 / Ubuntu 24.04.
@@ -24,10 +24,13 @@ change. The root can now be cloned directly into GNOME's extension directory;
 see the README. A separate UUID prevents replacement by the upstream extension.
 
 The schema ID and path are unchanged. Version `2.4-gnome46.2` added panel click
-actions and a symbolic-icon preference; `2.4-gnome46.3` adds scroll actions.
-**Run `make schemas` after pulling this update**, then log out and back in.
-Compile again whenever the XML changes; do
-not commit the compiled binary. JavaScript/CSS-only updates need no build.
+actions and a symbolic-icon preference; `2.4-gnome46.3` added scroll actions.
+Version `2.4-gnome46.4` adds theme accents and optional maintenance tools;
+it does not change the schema XML. Compile with `make schemas` whenever the
+XML changes, and do not commit the compiled binary. JavaScript/CSS-only
+updates need no build, but loaded modules require a new Shell session.
+The optional `make watch-updates` helper compiles schemas after Git updates;
+see [MAINTENANCE.md](MAINTENANCE.md) for setup, upstream syncing and theme overrides.
 
 ## Panel conveniences
 
@@ -65,8 +68,11 @@ actual panel/card/preferences code with GNOME 46 compatibility mocks. Those
 mocks deliberately omit St.BoxLayout's newer orientation property and
 Adw.ButtonRow. They also check click/scroll routing, smooth-scroll accumulation,
 capability guards, MPRIS method/property writes, preference bindings, and fixed
-artwork sizing. Native
-icon-theme lookup and recoloring are not simulated.
+artwork sizing. Accent tests cover color lookup, theme listener cleanup,
+active mode colors, and artwork geometry across hover/focus changes. Python
+tests use real temporary Git histories and schema compilation to exercise
+upstream merges and local updates, including conflicts and invalid schema XML.
+Native icon-theme lookup, rendering and notifications are not simulated.
 `make pack` produces a ZIP with a flat, installable extension root.
 
 This is static and mocked validation. Native GNOME 46 rendering, D-Bus playback,
@@ -82,3 +88,9 @@ the transport buttons still work. With Papirus, check symbolic player icons,
 then turn the preference off and back on. A player without a symbolic variant
 should retain its colored icon. Also switch icon themes while the extension is
 enabled, and toggle Player icon off to check the dependent preference row.
+
+For the new theme integration, try a red slider accent or the explicit CSS
+override, then reload the Shell theme. Check timestamps, equalizer, seek fill,
+engaged shuffle/repeat icons, and artwork hover/focus borders. Ordinary player
+icons should keep their own style. Test the optional helper on the desktop
+after a Pull, including dismissing its notice and opening logout confirmation.

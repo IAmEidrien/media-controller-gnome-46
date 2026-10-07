@@ -11,6 +11,7 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {ArtCache} from './artCache.js';
+import {ThemeAccent} from './accentColor.js';
 import {MediaCard} from './mediaCard.js';
 import {MprisManager} from './mpris.js';
 import {activatePanelAction} from './panelActions.js';
@@ -467,15 +468,21 @@ class MediaIndicator extends PanelMenu.Button {
 
         this._playButton.child.icon_name = playPauseIconName(player);
         this._loopButton.child.icon_name = loopIconName(player.loopStatus);
-        setToggleStyle(this._shuffleButton, player.shuffle === true);
+        setToggleStyle(this._shuffleButton, player.shuffle === true, this._accentColor);
         setToggleStyle(this._loopButton,
-            player.canLoop && player.loopStatus !== 'None');
+            player.canLoop && player.loopStatus !== 'None', this._accentColor);
 
         this._setSensitive(this._prevButton, player.canGoPrevious);
         this._setSensitive(this._nextButton, player.canGoNext);
         this._setSensitive(this._playButton, player.canPlay);
 
         this._applyOrder();
+    }
+
+    setAccentColor(color) {
+        this._accentColor = color;
+        this._card.setAccentColor(color);
+        this.sync();
     }
 
     _setSensitive(actor, sensitive) {
@@ -512,6 +519,7 @@ export default class MediaControlsExtension extends Extension {
         /* addToStatusArea unconditionally shows the container, which would undo
          * the "hide when nothing is playing" state chosen during construction. */
         this._indicator.sync();
+        this._themeAccent = new ThemeAccent(color => this._indicator.setAccentColor(color));
 
         this._settings.connectObject(
             'changed::panel-position', () => this._reposition(),
@@ -566,6 +574,8 @@ export default class MediaControlsExtension extends Extension {
          * owner needs the explicit disconnect. */
         this._settings.disconnectObject(this);
 
+        this._themeAccent?.destroy();
+        this._themeAccent = null;
         this._indicator?.destroy();
         this._indicator = null;
 

@@ -1,0 +1,62 @@
+name: Sync upstream into GNOME 46 fork
+
+on:
+  schedule:
+    - cron: '23 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    # Fork owners can remove/change this guard when enabling their own schedule.
+    if: github.repository == 'IAmEidrien/media-controller-gnome-46'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install check tools
+        run: sudo apt-get update && sudo apt-get install -y libglib2.0-bin zip nodejs python3 gh
+      - name: Prepare guarded merge
+        id: merge
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch https://github.com/naimur900/media-controller-gnome.git main:refs/remotes/upstream/main
+          python3 tools/sync_upstream.py
+          if git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Validate candidate
+        if: steps.merge.outputs.changed == 'true'
+        run: make check pack && git diff --check
+      - name: Publish validated merge
+        if: steps.merge.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git commit -m "Merge upstream into GNOME 46 fork"
+          # A normal push rejects a concurrently updated main; never force it.
+          git -c credential.helper='!gh auth git-credential' push origin HEAD:main
+      - name: Result
+        if: always()
+        env:
+          RESULT: ${{ job.status }}
+          CHANGED: ${{ steps.merge.outputs.changed }}
+        run: |
+          if [ "$RESULT" = success ] && [ "$CHANGED" = true ]; then
+            echo 'Upstream merge passed checks and was published to main.' >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$RESULT" = success ]; then
+            echo 'Upstream is already included; no commit was made.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Sync needs maintainer attention. No unvalidated candidate was published. See the failing step for conflicts or compatibility details.' >> "$GITHUB_STEP_SUMMARY"
+          fi

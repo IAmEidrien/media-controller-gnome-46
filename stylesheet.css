@@ -1,7 +1,8 @@
 /* Media Controls
  *
  * The card pins its own background color but inherits the shell's popup-menu
- * foreground. Custom accent elements use Adwaita blue on GNOME 46.
+ * foreground. accentColor.js follows the theme's slider fill for custom
+ * accents; the blue declarations below are the fallback before theme lookup.
  */
 
 /* ---------- Panel indicator ---------- */
@@ -189,7 +190,7 @@
   padding-right: 6px;
 }
 
-/* GNOME 46's standard Adwaita blue. The slider inherits its Shell theme color. */
+/* Blue fallback; theme accents are applied to the existing actors at runtime. */
 .mc-eq-bar {
   width: 3px;
   border-radius: 2px;
@@ -260,7 +261,7 @@
   icon-size: 16px;
 }
 
-/* An engaged mode uses Adwaita blue, as do the equalizer bars. This also
+/* An engaged mode uses the theme accent, as do the equalizer bars. This also
  * applies to the panel's copies of these buttons. */
 .mc-mode-on StIcon {
   color: #3584e4;

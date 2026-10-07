@@ -67,12 +67,16 @@ export function loopIconName(status) {
  *
  * @param {object} button an St.Button
  * @param {boolean} on whether the button's mode is currently engaged
+ * @param {string|null} accentColor resolved Shell theme color, or CSS fallback
  */
-export function setToggleStyle(button, on) {
-    if (on === button.has_style_class_name('mc-mode-on'))
-        return;
-    if (on)
-        button.add_style_class_name('mc-mode-on');
-    else
-        button.remove_style_class_name('mc-mode-on');
+export function setToggleStyle(button, on, accentColor = null) {
+    if (on !== button.has_style_class_name('mc-mode-on')) {
+        if (on)
+            button.add_style_class_name('mc-mode-on');
+        else
+            button.remove_style_class_name('mc-mode-on');
+    }
+    const style = on && accentColor ? `color: ${accentColor};` : null;
+    if (button.child && button.child.style !== style)
+        button.child.set_style(style);
 }

@@ -6,3 +6,4 @@ schemas/gschemas.compiled
 
 # Analyzer virtualenv, built on demand by `make shexli`.
 .shexli-venv/
+__pycache__/

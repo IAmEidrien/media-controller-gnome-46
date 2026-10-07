@@ -1,6 +1,6 @@
-# Media Controller: GNOME 46 personal fork
+# Media Controller: GNOME 46 public fork
 
-This is a temporary compatibility fork of `naimur900/media-controller-gnome`,
+This is a compatibility and convenience fork of `naimur900/media-controller-gnome`,
 based on upstream `0d7caf289ade7d3ee109c38d5d259bc50f4ef2a3` (2.4). Preserve
 upstream ancestry, copyright notices, and the GPL-2.0-or-later license.
 
@@ -17,6 +17,9 @@ testing from syntax checks or mocked constructors.
 - Shell 46 box layouts use `vertical`; `orientation` is not an St.BoxLayout
   property there. Preferences must work without Adw.ButtonRow (introduced 1.6).
   Shell 46 cannot resolve `-st-accent-color`.
+- Theme accents use the standard slider fill through St.ThemeNode color lookup,
+  with an optional `-media-controller-accent-color` override and blue fallback.
+  Preserve theme listener cleanup, artwork styles/sizing, and neutral icons.
 - Preserve fixed icon/artwork sizing, MPRIS capabilities, player selection,
   seek behavior, timer/signal cleanup, and cancellation of artwork downloads.
 - Panel shortcuts apply to the selected player and must not intercept transport
@@ -28,6 +31,15 @@ testing from syntax checks or mocked constructors.
 - Gitpulsar Pull updates the installed checkout. Use ordinary fast-forward
   commits on shared main; never force-push. Installation/uninstallation helpers
   must not remove a Git-managed extension checkout.
+- The optional tools/update_helper.py installs only systemd user units. It must
+  never pull Git, force a logout, overwrite a valid schema on compilation failure,
+  or block new schema compilations while a notification waits for a response.
+- Upstream automation must use normal merges/pushes, preserve the root layout,
+  require compatibility/check/package gates, and stop for conflicts or new
+  platform APIs. Do not describe mocked validation as native runtime coverage.
+- HUMANS.md is exclusively Eidrien's writing. Do not draft, paraphrase, polish
+  or edit its prose unless Eidrien supplies exact text and requests insertion.
+  Keep public AI disclosure and technical maintenance information in README.md.
 
 Run `make check`, `make pack`, and `git diff --check` for relevant changes.
 `make check` uses Node compatibility mocks, not a running GNOME Shell. A live

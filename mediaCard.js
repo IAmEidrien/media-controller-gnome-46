@@ -309,6 +309,15 @@ export const MediaCard = GObject.registerClass({
             this._player?.raise();
             this.emit('activated');
         });
+        this._artButton.connect('notify::hover', () => this._applyArtStyle());
+        this._artButton.connect('key-focus-in', () => {
+            this._artFocused = true;
+            this._applyArtStyle();
+        });
+        this._artButton.connect('key-focus-out', () => {
+            this._artFocused = false;
+            this._applyArtStyle();
+        });
         header.add_child(this._artButton);
 
         const textBox = new St.BoxLayout({
@@ -552,8 +561,13 @@ export const MediaCard = GObject.registerClass({
         const image = this._artPath
             ? ` background-image: ${cssUrl(this._artPath)};`
             : '';
-        this._artButton.style =
-            `width: ${size}px; height: ${size}px; border-radius: ${radius}px;${image}`;
+        const accentBorder = this._accentColor && this._artButton.reactive &&
+            (this._artButton.hover || this._artFocused)
+            ? ` border-color: ${this._accentColor};` : '';
+        const style =
+            `width: ${size}px; height: ${size}px; border-radius: ${radius}px;${image}${accentBorder}`;
+        if (this._artButton.style !== style)
+            this._artButton.set_style(style);
     }
 
     setPlayer(player) {
@@ -767,13 +781,23 @@ export const MediaCard = GObject.registerClass({
         this._loopButton.visible =
             this._settings.get_boolean('card-show-loop') && player.canLoop;
         this._loopButton.child.icon_name = loopIconName(player.loopStatus);
-        setToggleStyle(this._shuffleButton, player.shuffle === true);
+        setToggleStyle(this._shuffleButton, player.shuffle === true, this._accentColor);
         setToggleStyle(this._loopButton,
-            player.canLoop && player.loopStatus !== 'None');
+            player.canLoop && player.loopStatus !== 'None', this._accentColor);
 
         this._updateArt();
         this._updateSlider();
         this._updateTimer();
+    }
+
+    setAccentColor(color) {
+        this._accentColor = color;
+        this._equalizer.setAccentColor(color);
+        this._positionLabel.set_style(`color: ${color};`);
+        this._remainingLabel.set_style(`color: ${color};`);
+        this._slider.set_style(`-barlevel-active-background-color: ${color};`);
+        this._applyArtStyle();
+        this.sync();
     }
 
     /* Setting `reactive` is enough: St maps it to the `:insensitive` pseudo
@@ -795,6 +819,7 @@ export const MediaCard = GObject.registerClass({
         this._artButton.can_focus = raisable;
         this._artButton.track_hover = raisable;
         this._artButton.accessible_name = raisable ? identity : '';
+        this._applyArtStyle();
     }
 
     _onDestroy() {
