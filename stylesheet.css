@@ -1,8 +1,7 @@
 /* Media Controls
  *
  * The card pins its own background color but inherits the shell's popup-menu
- * foreground, so text and icons still follow the theme and the user's accent
- * color.
+ * foreground. Custom accent elements use Adwaita blue on GNOME 46.
  */
 
 /* ---------- Panel indicator ---------- */
@@ -120,7 +119,7 @@
  * Players that cannot be raised are left non-reactive, so they never hover. */
 .mc-art:hover,
 .mc-art:focus {
-  border-color: -st-accent-color;
+  border-color: #3584e4;
 }
 
 .mc-card-text {
@@ -180,11 +179,11 @@
   padding-right: 6px;
 }
 
-/* Follows the desktop accent colour, the same source the seek slider uses. */
+/* GNOME 46's standard Adwaita blue. The slider inherits its Shell theme color. */
 .mc-eq-bar {
   width: 3px;
   border-radius: 2px;
-  background-color: -st-accent-color;
+  background-color: #3584e4;
 }
 
 /* ---------- Seek bar ---------- */
@@ -203,7 +202,7 @@
   font-size: 0.8em;
   font-feature-settings: "tnum";
   font-weight: 500;
-  color: -st-accent-color;
+  color: #3584e4;
 }
 
 /* ---------- Controls ---------- */
@@ -251,9 +250,8 @@
   icon-size: 16px;
 }
 
-/* An engaged mode wears the desktop accent colour — the same source the
- * equalizer bars and the seek slider use. Also applies to the panel's copies
- * of these buttons. */
+/* An engaged mode uses Adwaita blue, as do the equalizer bars. This also
+ * applies to the panel's copies of these buttons. */
 .mc-mode-on StIcon {
-  color: -st-accent-color;
+  color: #3584e4;
 }

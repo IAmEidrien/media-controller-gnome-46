@@ -102,7 +102,7 @@ export const MediaCard = GObject.registerClass({
     _init(artCache, settings) {
         super._init({
             style_class: 'mc-card',
-            orientation: Clutter.Orientation.VERTICAL,
+            vertical: true,
             x_expand: true,
         });
 
@@ -157,7 +157,7 @@ export const MediaCard = GObject.registerClass({
     _buildSwitcher() {
         this._switcherBox = new St.BoxLayout({
             style_class: 'mc-player-tabs',
-            orientation: Clutter.Orientation.VERTICAL,
+            vertical: true,
             y_align: Clutter.ActorAlign.START,
             visible: false,
         });
@@ -289,7 +289,7 @@ export const MediaCard = GObject.registerClass({
     _buildHeader() {
         const header = new St.BoxLayout({
             style_class: 'mc-card-header',
-            orientation: Clutter.Orientation.HORIZONTAL,
+            vertical: false,
         });
 
         /* The artwork is the card's "go to the app" target: clicking it raises
@@ -313,7 +313,7 @@ export const MediaCard = GObject.registerClass({
 
         const textBox = new St.BoxLayout({
             style_class: 'mc-card-text',
-            orientation: Clutter.Orientation.VERTICAL,
+            vertical: true,
             y_align: Clutter.ActorAlign.CENTER,
             x_expand: true,
         });
@@ -339,7 +339,7 @@ export const MediaCard = GObject.registerClass({
          * underneath either of them. */
         const actions = new St.BoxLayout({
             style_class: 'mc-card-actions',
-            orientation: Clutter.Orientation.VERTICAL,
+            vertical: true,
             y_expand: true,
             x_align: Clutter.ActorAlign.END,
         });
@@ -360,7 +360,7 @@ export const MediaCard = GObject.registerClass({
          * its own, exactly as before. */
         const topRow = new St.BoxLayout({
             style_class: 'mc-card-actions-top',
-            orientation: Clutter.Orientation.HORIZONTAL,
+            vertical: false,
             x_align: Clutter.ActorAlign.END,
             y_align: Clutter.ActorAlign.START,
         });
@@ -371,7 +371,7 @@ export const MediaCard = GObject.registerClass({
         /* Expanding is what pushes this off the gear and centres it. */
         const status = new St.BoxLayout({
             style_class: 'mc-card-status',
-            orientation: Clutter.Orientation.HORIZONTAL,
+            vertical: false,
             x_align: Clutter.ActorAlign.END,
             y_align: Clutter.ActorAlign.CENTER,
             y_expand: true,
@@ -388,7 +388,7 @@ export const MediaCard = GObject.registerClass({
     _buildSeekBar() {
         this._seekBox = new St.BoxLayout({
             style_class: 'mc-seek-box',
-            orientation: Clutter.Orientation.VERTICAL,
+            vertical: true,
         });
 
         this._slider = new Slider(0);
@@ -424,7 +424,7 @@ export const MediaCard = GObject.registerClass({
 
         const times = new St.BoxLayout({
             style_class: 'mc-time-box',
-            orientation: Clutter.Orientation.HORIZONTAL,
+            vertical: false,
         });
         this._positionLabel = new St.Label({
             style_class: 'mc-time',
@@ -452,7 +452,7 @@ export const MediaCard = GObject.registerClass({
          * the row, underneath the play button.) */
         const row = new St.BoxLayout({
             style_class: 'mc-controls-row',
-            orientation: Clutter.Orientation.HORIZONTAL,
+            vertical: false,
         });
 
         this._shuffleButton = iconButton('media-playlist-shuffle-symbolic',
@@ -467,7 +467,7 @@ export const MediaCard = GObject.registerClass({
 
         const controls = new St.BoxLayout({
             style_class: 'mc-card-controls',
-            orientation: Clutter.Orientation.HORIZONTAL,
+            vertical: false,
             x_expand: true,
             x_align: Clutter.ActorAlign.CENTER,
             y_align: Clutter.ActorAlign.CENTER,

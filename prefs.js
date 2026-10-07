@@ -248,9 +248,8 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
         cache.add(status);
         this._refreshCacheStatus(status);
 
-        const clear = new Adw.ButtonRow({title: _('Clear Cache…')});
-        clear.add_css_class('destructive-action');
-        clear.connect('activated', () => this._onClearCache(window, status));
+        const clear = this._actionRow(_('Clear Cache…'), 'edit-delete-symbolic',
+            () => this._onClearCache(window, status));
         cache.add(clear);
         page.add(cache);
 
@@ -258,13 +257,28 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
             title: _('Reset'),
             description: _('Return every setting on the Panel and Card pages to the value it shipped with.'),
         });
-        const resetRow = new Adw.ButtonRow({title: _('Reset All Settings…')});
-        resetRow.add_css_class('destructive-action');
-        resetRow.connect('activated', () => this._onReset(window, settings));
+        const resetRow = this._actionRow(_('Reset All Settings…'), 'edit-undo-symbolic',
+            () => this._onReset(window, settings));
         reset.add(resetRow);
         page.add(reset);
 
         return page;
+    }
+
+    /* ButtonRow arrived in libadwaita 1.6; GNOME 46 ships 1.5. Keep the
+     * full row activatable while exposing a normal, accessible action button. */
+    _actionRow(title, iconName, onActivate) {
+        const row = new Adw.ActionRow({title});
+        const button = new Gtk.Button({
+            icon_name: iconName,
+            tooltip_text: title,
+            valign: Gtk.Align.CENTER,
+        });
+        button.add_css_class('destructive-action');
+        button.connect('clicked', onActivate);
+        row.add_suffix(button);
+        row.activatable_widget = button;
+        return row;
     }
 
     /**

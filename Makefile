@@ -1,17 +1,16 @@
-UUID    = media-controller@naimur
-SRC     = src
+UUID    = media-controller-gnome-46@eidrien.local
+SRC     = .
+GLIB_COMPILE_SCHEMAS ?= glib-compile-schemas
 INSTALL_DIR = $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
 ZIP     = $(UUID).shell-extension.zip
 
 # Throwaway virtualenv for the shexli static analyzer. Kept out of the repo and
 # reused across runs, since building it hits the network.
 SHEXLI_VENV = .shexli-venv
-SOURCES = $(SRC)/extension.js $(SRC)/prefs.js $(SRC)/mpris.js $(SRC)/mediaCard.js \
-          $(SRC)/artCache.js $(SRC)/playerIcons.js $(SRC)/scrollingLabel.js \
-          $(SRC)/transport.js $(SRC)/paths.js $(SRC)/equalizer.js \
-          $(SRC)/metadata.json $(SRC)/stylesheet.css
+SOURCES = $(wildcard *.js) metadata.json stylesheet.css LICENSE
+SCHEMAS = $(wildcard schemas/*.gschema.xml)
 
-.PHONY: all schemas install uninstall enable disable pack check shexli clean-shexli logs prefs clean
+.PHONY: all schemas install uninstall enable disable pack check test shexli clean-shexli logs prefs clean
 
 all: schemas
 
@@ -19,18 +18,21 @@ all: schemas
 schemas: $(SRC)/schemas/gschemas.compiled
 
 $(SRC)/schemas/gschemas.compiled: $(SRC)/schemas/*.gschema.xml
-	glib-compile-schemas --strict $(SRC)/schemas/
+	$(GLIB_COMPILE_SCHEMAS) --strict $(SRC)/schemas/
 
+# A checkout installed directly is updated with Gitpulsar Pull, not copied over.
 install: schemas
-	rm -rf $(INSTALL_DIR)
-	mkdir -p $(INSTALL_DIR)
-	cp -r $(SRC)/. $(INSTALL_DIR)/
+	@test ! -e "$(INSTALL_DIR)/.git" || { echo "Git checkout: use Pull in Gitpulsar instead."; exit 1; }
+	mkdir -p "$(INSTALL_DIR)/schemas"
+	cp $(SOURCES) "$(INSTALL_DIR)/"
+	cp $(SCHEMAS) schemas/gschemas.compiled "$(INSTALL_DIR)/schemas/"
 	@echo "Installed to $(INSTALL_DIR)"
 	@echo "Now log out and back in (Wayland), then: make enable"
 
 uninstall:
+	@test ! -e "$(INSTALL_DIR)/.git" || { echo "Git checkout: disable the extension and manage its checkout separately."; exit 1; }
 	-gnome-extensions disable $(UUID)
-	rm -rf $(INSTALL_DIR)
+	rm -rf "$(INSTALL_DIR)"
 
 enable:
 	gnome-extensions enable $(UUID)
@@ -42,12 +44,15 @@ prefs:
 	gnome-extensions prefs $(UUID)
 
 # Syntax-checks every module without a running shell.
-check:
+check: test
 	@for f in $(SRC)/*.js; do \
-		node --check "$$f" >/dev/null 2>&1 && echo "ok   $$f" || { echo "FAIL $$f"; node --check "$$f"; exit 1; }; \
+		node --input-type=module --check < "$$f" >/dev/null 2>&1 && echo "ok   $$f" || { echo "FAIL $$f"; node --input-type=module --check < "$$f"; exit 1; }; \
 	done
-	@glib-compile-schemas --strict --dry-run $(SRC)/schemas/ && echo "ok   schemas"
+	@$(GLIB_COMPILE_SCHEMAS) --strict --dry-run $(SRC)/schemas/ && echo "ok   schemas"
 	@python3 -c "import json;json.load(open('$(SRC)/metadata.json'))" && echo "ok   metadata.json"
+
+test:
+	node --test tests/*.test.mjs
 
 # Static analysis for extensions.gnome.org packaging and review issues. Runs
 # against a freshly packed zip — the actual submission artifact.
@@ -70,19 +75,8 @@ clean-shexli:
 	rm -rf $(SHEXLI_VENV)
 
 pack: schemas
-	rm -f $(ZIP)
-	gnome-extensions pack $(SRC) \
-		--extra-source=mpris.js \
-		--extra-source=mediaCard.js \
-		--extra-source=artCache.js \
-		--extra-source=playerIcons.js \
-		--extra-source=scrollingLabel.js \
-		--extra-source=transport.js \
-		--extra-source=paths.js \
-		--extra-source=equalizer.js \
-		"--extra-source=$(CURDIR)/LICENSE" \
-		--schema=schemas/org.gnome.shell.extensions.media-controller.gschema.xml \
-		--force
+	rm -f "$(ZIP)"
+	zip -q "$(ZIP)" $(SOURCES) $(SCHEMAS) schemas/gschemas.compiled
 
 # Live extension logs. Ctrl-C to stop.
 logs:

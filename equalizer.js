@@ -27,7 +27,7 @@ class Equalizer extends St.BoxLayout {
     _init() {
         super._init({
             style_class: 'mc-equalizer',
-            orientation: Clutter.Orientation.HORIZONTAL,
+            vertical: false,
             /* The widget centres against its neighbours; the bars inside it hang
              * from its bottom edge, the way a level meter reads. */
             y_align: Clutter.ActorAlign.CENTER,

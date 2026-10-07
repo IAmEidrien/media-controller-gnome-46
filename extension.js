@@ -67,7 +67,7 @@ class MediaIndicator extends PanelMenu.Button {
 
         this._box = new St.BoxLayout({
             style_class: 'mc-panel-box',
-            orientation: Clutter.Orientation.HORIZONTAL,
+            vertical: false,
             y_align: Clutter.ActorAlign.CENTER,
         });
         this.add_child(this._box);
@@ -203,7 +203,7 @@ class MediaIndicator extends PanelMenu.Button {
     _buildTextBox() {
         this._textBox = new St.BoxLayout({
             style_class: 'mc-panel-text',
-            orientation: Clutter.Orientation.HORIZONTAL,
+            vertical: false,
             y_align: Clutter.ActorAlign.CENTER,
         });
 
@@ -221,7 +221,7 @@ class MediaIndicator extends PanelMenu.Button {
     _buildControls() {
         this._controlsBox = new St.BoxLayout({
             style_class: 'mc-panel-controls',
-            orientation: Clutter.Orientation.HORIZONTAL,
+            vertical: false,
             y_align: Clutter.ActorAlign.CENTER,
         });
 

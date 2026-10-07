@@ -1,4 +1,13 @@
-# Media Controls
+# Media Controller — GNOME 46 fork
+
+Personal GNOME 46 compatibility fork of
+[naimur900/media-controller-gnome](https://github.com/naimur900/media-controller-gnome),
+based on upstream commit `0d7caf2` (2.4). The formal GitHub fork relationship and
+upstream history are retained. This fork has its own UUID and only declares
+GNOME 46 support. The upstream release targets GNOME 47–50.
+
+The extension files live at the repository root for direct Gitpulsar updates.
+See [GNOME-46.md](GNOME-46.md) for the compatibility changes and validation limits.
 
 A GNOME Shell extension that puts whatever is currently playing into the top
 panel, with playback controls and an iOS-style now-playing card.
@@ -7,26 +16,8 @@ Works with any player that speaks MPRIS2 — Spotify, Firefox, Chrome, VLC,
 Rhythmbox, mpv, and so on.
 
 <p align="center">
-  <a href="https://extensions.gnome.org/extension/10373/media-controller/">
-    <img src="public/gnome-logo.png"
-         alt="Install from GNOME Extensions"
-         width="260">
-  </a>
+  <img src="public/img-1.png" alt="Upstream panel indicator and now-playing card" width="700">
 </p>
-
-<p align="center">
-  <a href="https://extensions.gnome.org/extension/10373/media-controller/"><strong>Install from GNOME Extensions →</strong></a>
-</p>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/GNOME-47--50-4A86CF?logo=gnome&logoColor=white" alt="GNOME Shell">
-  <img src="https://img.shields.io/badge/License-GPL--2.0-green.svg" alt="License">
-</p>
-
-<p align="center">
-  <img src="public/img-1.png" alt="The panel indicator and the now-playing card, showing album art, a seek bar and transport controls" width="700">
-</p>
-<p align="center"><em>The panel indicator and the now-playing card.</em></p>
 
 ## Features
 
@@ -56,40 +47,51 @@ Rhythmbox, mpv, and so on.
   left alone, and the whole behavior can be switched off.
 - **Shuffle and loop** control the player directly: shuffle toggles on and off,
   loop cycles between off, repeating the whole queue, and repeating one track,
-  and an engaged mode lights up in your accent color.
+  and an engaged mode lights up in Adwaita blue.
 - **Configurable panel position**: far left, left, center, right, or far right.
-- Follows the shell theme, including light/dark and your accent color.
+- Uses Shell media-button and slider styles, with Adwaita blue for custom accent elements.
 
 Skip buttons only appear for players that support seeking; shuffle and loop
 only for players that expose them over MPRIS.
 
 ## Requirements
 
-- GNOME Shell 47 to 50
+- GNOME Shell 46, libadwaita 1.5, and GLib 2.80 (Linux Mint 22 / Ubuntu 24.04)
 - A player exposing the MPRIS2 D-Bus interface
 
-## Install
+## Install with Gitpulsar updates
+
+Disable the older Media Controls extension first so it does not occupy the same
+panel role. The fork's UUID is `media-controller-gnome-46@eidrien.local`.
+
+Clone into GNOME's extension directory (the destination must not already exist):
 
 ```sh
-make install
+git clone git@github.com:IAmEidrien/media-controller-gnome-46.git \
+  ~/.local/share/gnome-shell/extensions/media-controller-gnome-46@eidrien.local
+cd ~/.local/share/gnome-shell/extensions/media-controller-gnome-46@eidrien.local
+make schemas
 ```
 
-Then log out and back in — GNOME Shell only scans for new extensions at startup,
-and on Wayland it cannot be restarted in place. After logging back in:
+Log out and back in on Wayland, then enable the extension in Extension Manager
+or run:
 
 ```sh
-make enable
-make prefs     # open the preferences window
+gnome-extensions enable media-controller-gnome-46@eidrien.local
 ```
 
-Or install directly from the official GNOME Extensions website:
+Open this checkout in Gitpulsar. For future updates, **Pull**, then log out and
+back in. Run `make schemas` after a schema XML change. No full build is needed
+for JavaScript or stylesheet updates. Keep personal settings outside Git.
 
-**https://extensions.gnome.org/extension/10373/media-controller/**
+For a separate source checkout, `make install` copies the runtime files. It
+refuses to overwrite a Git-managed installation. `make uninstall` also refuses
+to delete a Git checkout.
 
 ## Development
 
 ```sh
-make check     # syntax-check the JS, schema and metadata
+make check     # compatibility smoke tests, JS syntax, schema and metadata
 make schemas   # compile the GSettings schema
 make pack      # build a distributable zip
 make logs      # follow this extension's shell log output
@@ -133,12 +135,12 @@ in on Wayland, because the shell caches ES modules for the life of the process.
 
 | File                                           | Purpose                                     |
 | ---------------------------------------------- | ------------------------------------------- |
-| [src/extension.js](src/extension.js)           | Panel indicator, menu, panel placement      |
-| [src/mediaCard.js](src/mediaCard.js)           | The now-playing card                        |
-| [src/scrollingLabel.js](src/scrollingLabel.js) | The fixed-width panel label and its marquee |
-| [src/mpris.js](src/mpris.js)                   | MPRIS2 D-Bus client and player tracking     |
-| [src/artCache.js](src/artCache.js)             | Resolves and caches album art               |
-| [src/prefs.js](src/prefs.js)                   | Preferences window                          |
+| [extension.js](extension.js)           | Panel indicator, menu, panel placement      |
+| [mediaCard.js](mediaCard.js)           | The now-playing card                        |
+| [scrollingLabel.js](scrollingLabel.js) | The fixed-width panel label and its marquee |
+| [mpris.js](mpris.js)                   | MPRIS2 D-Bus client and player tracking     |
+| [artCache.js](artCache.js)             | Resolves and caches album art               |
+| [prefs.js](prefs.js)                   | Preferences window                          |
 
 `mpris.js` and `artCache.js` deliberately import only `gi://` modules, never
 `resource:///org/gnome/shell/…`, so they can be exercised outside the shell.

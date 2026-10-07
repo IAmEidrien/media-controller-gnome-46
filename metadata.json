@@ -1,10 +1,10 @@
 {
-  "uuid": "media-controller@naimur",
-  "name": "Media Controls",
+  "uuid": "media-controller-gnome-46@eidrien.local",
+  "name": "Media Controller (GNOME 46)",
   "description": "Show the currently playing media in the top panel with playback controls and an iOS-inspired now-playing card. Works with any MPRIS-compatible player, including Spotify, Firefox, Chrome, VLC, mpv, Rhythmbox, and more.",
-  "shell-version": ["47", "48", "49", "50"],
+  "shell-version": ["46"],
   "settings-schema": "org.gnome.shell.extensions.media-controller",
   "gettext-domain": "media-controller",
-  "version-name": "2.4",
-  "url": "https://github.com/naimur900/media-controller-gnome"
+  "version-name": "2.4-gnome46.1",
+  "url": "https://github.com/IAmEidrien/media-controller-gnome-46"
 }

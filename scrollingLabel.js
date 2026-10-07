@@ -43,7 +43,7 @@ class ScrollingLabel extends St.Widget {
         this._loopId = 0;
 
         this._box = new St.BoxLayout({
-            orientation: Clutter.Orientation.HORIZONTAL,
+            vertical: false,
             style: `spacing: ${GAP}px;`,
         });
         this._first = new St.Label({style_class: styleClass, y_align: Clutter.ActorAlign.CENTER});
