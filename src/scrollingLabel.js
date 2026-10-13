@@ -38,7 +38,7 @@ class ScrollingLabel extends St.Widget {
         this._rightToLeft = false;
         this._loopForever = true;
 
-        /* The scroll distance currently animating; 0 when nothing is moving. */
+        /* Scroll distance for the current text; 0 when it fits or scrolling is off. */
         this._distance = 0;
         this._loopId = 0;
 
@@ -107,13 +107,14 @@ class ScrollingLabel extends St.Widget {
 
         const fullWidth = this._textWidth();
         if (!this._scrolling || fullWidth <= this._width) {
+            this._distance = 0;
             this._showStatic();
             return;
         }
 
         const distance = fullWidth + GAP;
-        /* A style-changed that did not actually move anything must not restart
-         * the animation, or the title would jump back to the start. */
+        /* style-changed fires on every hover / menu open. If nothing moved,
+         * leave the label alone instead of replaying the scroll. */
         if (!force && this._distance === distance)
             return;
 
@@ -127,15 +128,15 @@ class ScrollingLabel extends St.Widget {
         this._start();
     }
 
-    /* Scrolling off, or the text already fits: one ellipsized copy. Pinning it
-     * to the window is what makes Pango add the ellipsis — left at its natural
-     * width it would simply be cut off by the clip. */
+    /* Scrolling off, the text already fits, or the pass is over: one
+     * ellipsized copy. Pinning it to the window is what makes Pango add the
+     * ellipsis — left at its natural width it would simply be cut off by the
+     * clip. */
     _showStatic() {
         this._stop();
         this._first.clutter_text.ellipsize = Pango.EllipsizeMode.END;
         this._first.set_width(this._width);
         this._second.visible = false;
-        this._distance = 0;
     }
 
     _start() {
