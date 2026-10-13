@@ -19,7 +19,7 @@ Rhythmbox, mpv, and so on.
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/GNOME-47--50-4A86CF?logo=gnome&logoColor=white" alt="GNOME Shell">
+  <img src="https://img.shields.io/badge/GNOME-47--51-4A86CF?logo=gnome&logoColor=white" alt="GNOME Shell">
   <img src="https://img.shields.io/badge/License-GPL--2.0-green.svg" alt="License">
 </p>
 
@@ -70,7 +70,7 @@ only for players that expose them over MPRIS.
 
 ## Requirements
 
-- GNOME Shell 47 to 50
+- GNOME Shell 47 to 51
 - A player exposing the MPRIS2 D-Bus interface
 
 ## Install
