@@ -19,7 +19,7 @@ Rhythmbox, mpv, and so on.
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/GNOME-47--50-4A86CF?logo=gnome&logoColor=white" alt="GNOME Shell">
+  <img src="https://img.shields.io/badge/GNOME-47--51-4A86CF?logo=gnome&logoColor=white" alt="GNOME Shell">
   <img src="https://img.shields.io/badge/License-GPL--2.0-green.svg" alt="License">
 </p>
 
@@ -57,6 +57,11 @@ Rhythmbox, mpv, and so on.
 - **Shuffle and loop** control the player directly: shuffle toggles on and off,
   loop cycles between off, repeating the whole queue, and repeating one track,
   and an engaged mode lights up in your accent color.
+- **Lyrics** for the song that is playing, from the player itself, an `.lrc`
+  file beside the track, or [LRCLIB](https://lrclib.net). Timed lyrics light up
+  line by line and follow the song; clicking a line plays from there. The button
+  only appears for music players — not for browsers, nor for films in video
+  players.
 - **Configurable panel position**: far left, left, center, right, or far right.
 - Follows the shell theme, including light/dark and your accent color.
 
@@ -65,7 +70,7 @@ only for players that expose them over MPRIS.
 
 ## Requirements
 
-- GNOME Shell 47 to 50
+- GNOME Shell 47 to 51
 - A player exposing the MPRIS2 D-Bus interface
 
 ## Install
@@ -126,6 +131,8 @@ in on Wayland, because the shell caches ES modules for the life of the process.
 | `card-show-seek-bar`                              | on              | Seek bar in the card                                    |
 | `card-show-seek-buttons`                          | on              | Skip buttons in the card                                |
 | `card-show-shuffle` / `card-show-loop`            | on              | Shuffle and loop buttons on the card's edges            |
+| `card-show-lyrics-button`                         | on              | Lyrics button in the card, for music players            |
+| `lyrics-online-lookup`                            | off             | Ask LRCLIB when the player and `.lrc` files have none   |
 | `seek-step-seconds`                               | 10              | How far the skip buttons jump, in seconds               |
 | `card-width`                                      | 400             | Card width in pixels (400–560)                          |
 
@@ -135,13 +142,23 @@ in on Wayland, because the shell caches ES modules for the life of the process.
 | ---------------------------------------------- | ------------------------------------------- |
 | [src/extension.js](src/extension.js)           | Panel indicator, menu, panel placement      |
 | [src/mediaCard.js](src/mediaCard.js)           | The now-playing card                        |
+| [src/lyricsPanel.js](src/lyricsPanel.js)       | The card's lyrics view                      |
+| [src/lyrics.js](src/lyrics.js)                 | Finds lyrics and parses LRC                 |
 | [src/scrollingLabel.js](src/scrollingLabel.js) | The fixed-width panel label and its marquee |
 | [src/mpris.js](src/mpris.js)                   | MPRIS2 D-Bus client and player tracking     |
 | [src/artCache.js](src/artCache.js)             | Resolves and caches album art               |
 | [src/prefs.js](src/prefs.js)                   | Preferences window                          |
+| [src/compat.js](src/compat.js)                 | Differences between GNOME Shell versions    |
+| [src/updateNotice.js](src/updateNotice.js)     | What's-new notification after an update     |
 
-`mpris.js` and `artCache.js` deliberately import only `gi://` modules, never
-`resource:///org/gnome/shell/…`, so they can be exercised outside the shell.
+`mpris.js`, `artCache.js` and `lyrics.js` deliberately import only `gi://`
+modules, never `resource:///org/gnome/shell/…`, so they can be exercised outside
+the shell.
+
+## Credits
+
+- [FrigoreD](https://github.com/FrigoreD) — lyrics in the card, plus fixes for
+  live streams, switching players and the scrolling title.
 
 ## License
 
@@ -158,3 +175,7 @@ downloaded once and cached under `~/.cache/media-controls/art/`.
 Players that do not report a track length (most web players) simply do not show a
 seek bar. `playerctld` is ignored, since it mirrors another player that is
 already tracked.
+
+Looking lyrics up online sends the track's title, artist, album and length to
+lrclib.net, and only while the lyrics are open. It is off by default; turn
+`lyrics-online-lookup` on to search beyond the player and local `.lrc` files.

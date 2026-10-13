@@ -11,6 +11,8 @@ import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 
+import {boxOrientation} from './compat.js';
+
 const BAR_COUNT = 4;
 
 /* The container is BAR_MAX tall, so the bars grow upward from a fixed baseline
@@ -27,7 +29,7 @@ class Equalizer extends St.BoxLayout {
     _init() {
         super._init({
             style_class: 'mc-equalizer',
-            orientation: Clutter.Orientation.HORIZONTAL,
+            ...boxOrientation(Clutter.Orientation.HORIZONTAL),
             /* The widget centres against its neighbours; the bars inside it hang
              * from its bottom edge, the way a level meter reads. */
             y_align: Clutter.ActorAlign.CENTER,

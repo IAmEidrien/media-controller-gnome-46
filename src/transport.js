@@ -11,6 +11,8 @@
  * and has to dim itself.
  */
 
+import Clutter from 'gi://Clutter';
+
 /** MPRIS speaks microseconds throughout. */
 export const US_PER_SECOND = 1000000;
 
@@ -75,4 +77,34 @@ export function setToggleStyle(button, on) {
         button.add_style_class_name('mc-mode-on');
     else
         button.remove_style_class_name('mc-mode-on');
+}
+
+/**
+ * St derives hover from an enter/leave count that goes stale when a widget
+ * turns non-reactive under the pointer, so resync it from the pointer itself.
+ *
+ * @param {object} actor an St.Widget
+ * @param {boolean} reactive whether it should take input
+ */
+export function setReactive(actor, reactive) {
+    if (actor.reactive === reactive)
+        return;
+    actor.reactive = reactive;
+    syncHover(actor);
+}
+
+/**
+ * @param {object} actor an St.Widget whose `hover` should match the pointer
+ */
+export function syncHover(actor) {
+    if (!actor.track_hover)
+        return;
+
+    let hovered = false;
+    if (actor.reactive && actor.mapped) {
+        const [x, y] = global.get_pointer();
+        const target = global.stage.get_actor_at_pos(Clutter.PickMode.REACTIVE, x, y);
+        hovered = !!target && actor.contains(target);
+    }
+    actor.hover = hovered;
 }
