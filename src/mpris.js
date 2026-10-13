@@ -720,11 +720,12 @@ export const MprisManager = GObject.registerClass({
             if (other === player || !other.isPlaying)
                 continue;
 
+            /* Not recorded as Paused until the player says so. Browsers send
+             * other property changes before the status catches up, and each
+             * would then read as Playing-after-Paused — a fresh start, which
+             * would pause the player that was just started. Pausing twice is
+             * harmless: Pause on a paused player does nothing. */
             other.pause();
-            /* Record it now: the player's own PropertiesChanged will confirm
-             * this in a moment, and until then a second start elsewhere should
-             * not see it as still playing and pause it twice. */
-            this._statuses.set(other.busName, 'Paused');
         }
     }
 
