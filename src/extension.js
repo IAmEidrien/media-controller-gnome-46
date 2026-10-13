@@ -15,7 +15,7 @@ import {MediaCard} from './mediaCard.js';
 import {MprisManager} from './mpris.js';
 import {ScrollingLabel} from './scrollingLabel.js';
 import {loopIconName, nextLoopStatus, playPauseIconName, seekOffset,
-    setToggleStyle} from './transport.js';
+    setReactive, setToggleStyle} from './transport.js';
 
 const ROLE = 'media-controls';
 
@@ -375,7 +375,7 @@ class MediaIndicator extends PanelMenu.Button {
     }
 
     _setSensitive(actor, sensitive) {
-        actor.reactive = sensitive;
+        setReactive(actor, sensitive);
         actor.opacity = sensitive ? 255 : 100;
     }
 

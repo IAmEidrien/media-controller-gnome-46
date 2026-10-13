@@ -16,7 +16,7 @@ import { Slider } from 'resource:///org/gnome/shell/ui/slider.js';
 import { Equalizer } from './equalizer.js';
 import {
     US_PER_SECOND, loopIconName, nextLoopStatus, playPauseIconName,
-    seekOffset, setToggleStyle
+    seekOffset, setReactive, setToggleStyle, syncHover
 } from './transport.js';
 
 const POSITION_POLL_SECONDS = 1;
@@ -779,7 +779,7 @@ export const MediaCard = GObject.registerClass({
     /* Setting `reactive` is enough: St maps it to the `:insensitive` pseudo
      * class, which the theme already styles. */
     _setSensitive(actor, sensitive) {
-        actor.reactive = sensitive;
+        setReactive(actor, sensitive);
     }
 
     /**
@@ -791,9 +791,12 @@ export const MediaCard = GObject.registerClass({
      * @param {string} identity names the target for screen readers
      */
     _setRaisable(raisable, identity = '') {
-        this._artButton.reactive = raisable;
-        this._artButton.can_focus = raisable;
-        this._artButton.track_hover = raisable;
+        if (this._artButton.reactive !== raisable) {
+            this._artButton.can_focus = raisable;
+            this._artButton.track_hover = raisable;
+            setReactive(this._artButton, raisable);
+            syncHover(this._artButton);
+        }
         this._artButton.accessible_name = raisable ? identity : '';
     }
 
