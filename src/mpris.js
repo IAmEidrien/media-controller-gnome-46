@@ -23,6 +23,10 @@ const PROPS_IFACE = 'org.freedesktop.DBus.Properties';
  * duplicate of a player we already track. */
 const IGNORED_BUS_NAMES = ['org.mpris.MediaPlayer2.playerctld'];
 
+/* Browsers report a live stream's infinite duration as INT64_MAX µs, or close
+ * to it. Nothing that runs a year or longer is a real track. */
+const MAX_TRACK_LENGTH = 365 * 24 * 3600 * 1000000;
+
 const DBusIface = `
 <node>
   <interface name="org.freedesktop.DBus">
@@ -218,7 +222,8 @@ export const MprisPlayer = GObject.registerClass({
 
     /** Track length in microseconds, or 0 when the player does not report it. */
     get length() {
-        return asNumber(this._meta('mpris:length'));
+        const length = asNumber(this._meta('mpris:length'));
+        return length > 0 && length < MAX_TRACK_LENGTH ? length : 0;
     }
 
     get status() {
