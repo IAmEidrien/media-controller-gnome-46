@@ -69,6 +69,17 @@ function describeTrack(player) {
     return {busName, title, artists, album, length, url, lyrics};
 }
 
+/* Field by field rather than through JSON: this runs on every property change
+ * of the player while the lyrics are shown, and `lyrics` can be the whole text
+ * of the song. */
+function sameTrack(a, b) {
+    return b !== null &&
+        a.busName === b.busName && a.title === b.title && a.album === b.album &&
+        a.length === b.length && a.url === b.url && a.lyrics === b.lyrics &&
+        a.artists.length === b.artists.length &&
+        a.artists.every((artist, i) => artist === b.artists[i]);
+}
+
 export const LyricsPanel = GObject.registerClass({
     Signals: {
         'seek-requested': {param_types: [GObject.TYPE_INT64]},
@@ -91,8 +102,8 @@ export const LyricsPanel = GObject.registerClass({
         this._active = false;
         this._timers = new Map();
 
+        /* The track being shown; null makes the next sync look up afresh. */
         this._track = null;
-        this._trackKey = null;
         this._generation = 0;
         this._retries = 0;
         this._failed = false;
@@ -110,7 +121,7 @@ export const LyricsPanel = GObject.registerClass({
         this._buildLines();
 
         this._settings.connectObject('changed::lyrics-online-lookup', () => {
-            this._trackKey = null;
+            this._track = null;
             this._sync(0);
         }, this);
         this.connect('destroy', () => this._onDestroy());
@@ -214,7 +225,7 @@ export const LyricsPanel = GObject.registerClass({
     /* A failed lookup is retried when the lyrics are shown again. */
     _reveal(shown) {
         if (shown && this._failed)
-            this._trackKey = null;
+            this._track = null;
         this._sync(0);
     }
 
@@ -224,21 +235,19 @@ export const LyricsPanel = GObject.registerClass({
         if (!this._shown()) {
             /* A lookup that has not started yet starts over when shown again. */
             if (this._timers.has('lookup'))
-                this._trackKey = null;
+                this._track = null;
             this._cancel('lookup');
             this._cancel('tick');
             return;
         }
 
         const track = describeTrack(this._player);
-        const key = JSON.stringify(track);
-        if (key === this._trackKey) {
+        if (sameTrack(track, this._track)) {
             this._refreshCurrent();
             return;
         }
 
         this._track = track;
-        this._trackKey = key;
         this._generation++;
         this._retries = 0;
         this._failed = false;
