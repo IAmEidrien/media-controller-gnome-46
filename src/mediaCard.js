@@ -671,8 +671,9 @@ export const MediaCard = GObject.registerClass({
             /* The D-Bus round trip can outlive a drag starting, the player it
              * was issued for, or the card itself (destroy nulls `_player`) — a
              * late answer from the previous track would otherwise be painted
-             * onto this one's slider. */
-            if (this._dragging || this._player !== player)
+             * onto this one's slider. A failed read keeps the last known
+             * position rather than snapping the slider and lyrics to 0. */
+            if (position === null || this._dragging || this._player !== player)
                 return;
             this._position = position;
             this._updateSlider();

@@ -55,11 +55,12 @@ function themedIcon(iconTheme, name) {
 /**
  * Whether a desktop id names the app the player calls `name`, ignoring the
  * vendor prefix: `spotify` matches `com.spotify.Client`, and `chrome` matches
- * `com.google.Chrome`. Only whole runs of dotted segments count, so `foo` does
- * not match `io.gitlab.adhami3310.Footage`.
+ * `com.google.Chrome`. Snap ids are `<snap>_<app>`, so `spotify` matches
+ * `spotify_spotify` too. Only whole runs of segments count, so `foo` does not
+ * match `io.gitlab.adhami3310.Footage`.
  */
 function idNamesApp(id, wanted) {
-    const segments = id.replace(/\.desktop$/, '').split('.').map(normalize);
+    const segments = id.replace(/\.desktop$/, '').split(/[._]/).map(normalize);
     for (let start = 0; start < segments.length; start++) {
         let run = '';
         for (let end = start; end < segments.length; end++) {

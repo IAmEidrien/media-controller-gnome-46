@@ -132,7 +132,7 @@ in on Wayland, because the shell caches ES modules for the life of the process.
 | `card-show-seek-buttons`                          | on              | Skip buttons in the card                                |
 | `card-show-shuffle` / `card-show-loop`            | on              | Shuffle and loop buttons on the card's edges            |
 | `card-show-lyrics-button`                         | on              | Lyrics button in the card, for music players            |
-| `lyrics-online-lookup`                            | on              | Ask LRCLIB when the player and `.lrc` files have none   |
+| `lyrics-online-lookup`                            | off             | Ask LRCLIB when the player and `.lrc` files have none   |
 | `seek-step-seconds`                               | 10              | How far the skip buttons jump, in seconds               |
 | `card-width`                                      | 400             | Card width in pixels (400–560)                          |
 
@@ -171,5 +171,5 @@ seek bar. `playerctld` is ignored, since it mirrors another player that is
 already tracked.
 
 Looking lyrics up online sends the track's title, artist, album and length to
-lrclib.net, and only while the lyrics are open. Turn `lyrics-online-lookup` off
-to keep lookups to the player and local `.lrc` files.
+lrclib.net, and only while the lyrics are open. It is off by default; turn
+`lyrics-online-lookup` on to search beyond the player and local `.lrc` files.

@@ -178,7 +178,7 @@
     </key>
 
     <key name="lyrics-online-lookup" type="b">
-      <default>true</default>
+      <default>false</default>
       <summary>Look up lyrics on LRCLIB</summary>
       <description>When neither the player nor an .lrc file beside the track has lyrics, ask lrclib.net. The track's title, artist, album and length are sent, and only while the lyrics are open.</description>
     </key>

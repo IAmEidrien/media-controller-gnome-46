@@ -60,6 +60,10 @@ class ScrollingLabel extends St.Widget {
         /* Widths measured before the theme resolves the font are wrong, and the
          * font can change later (theme switch, font-size change). */
         this._styleId = this._first.connect('style-changed', () => this._update());
+        /* With animations off the label sits static at its scroll distance, so
+         * style-changed alone would never restart it once they are back on. */
+        St.Settings.get().connectObject('notify::enable-animations',
+            () => this._update(true), this);
 
         this.connect('destroy', () => this._onDestroy());
     }

@@ -429,12 +429,13 @@ export const MprisPlayer = GObject.registerClass({
      * The Position property is intentionally excluded from PropertiesChanged by
      * the MPRIS spec, so a cached read would be stale. Always ask the bus.
      *
-     * @returns {Promise<number>} position in microseconds
+     * @returns {Promise<number|null>} position in microseconds, or null when
+     *   the player could not say
      */
     getPosition() {
         return new Promise(resolve => {
             if (!this._playerProxy) {
-                resolve(0);
+                resolve(null);
                 return;
             }
             Gio.DBus.session.call(
@@ -447,7 +448,7 @@ export const MprisPlayer = GObject.registerClass({
                         const [value] = connection.call_finish(result).deep_unpack();
                         resolve(asNumber(value.deep_unpack()));
                     } catch {
-                        resolve(0);
+                        resolve(null);
                     }
                 });
         });
@@ -493,7 +494,10 @@ export const MprisPlayer = GObject.registerClass({
         /* The Seek runs after a round trip, so a synchronous `try` around this
          * call would already have returned by the time it could throw. */
         this.getPosition()
-            .then(current => this._playerProxy?.SeekRemote(position - current, () => {}))
+            .then(current => {
+                if (current !== null)
+                    this._playerProxy?.SeekRemote(position - current, () => {});
+            })
             .catch(warn);
     }
 

@@ -10,7 +10,8 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Soup from 'gi://Soup';
 
-import {US_PER_SECOND} from './transport.js';
+/* Not imported from transport.js, which needs the shell's Clutter. */
+const US_PER_SECOND = 1000000;
 
 const API_URL = 'https://lrclib.net/api';
 
