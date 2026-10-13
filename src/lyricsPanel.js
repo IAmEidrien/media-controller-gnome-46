@@ -6,6 +6,7 @@
  */
 
 import Clutter from 'gi://Clutter';
+import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Pango from 'gi://Pango';
@@ -15,6 +16,20 @@ import { gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.j
 
 import { boxOrientation } from './compat.js';
 import { US_PER_SECOND } from './transport.js';
+
+/**
+ * The quote bubble the lyrics button and the empty panel both wear. Bundled,
+ * since no stock symbolic icon says "lyrics"; the `-symbolic.svg` name is what
+ * makes St recolor it like a theme icon.
+ *
+ * @returns {Gio.Icon}
+ */
+export function lyricsIcon() {
+    return new Gio.FileIcon({
+        file: Gio.File.new_for_uri(import.meta.url).get_parent()
+            .resolve_relative_path('icons/lyrics-symbolic.svg'),
+    });
+}
 
 /* Metadata arrives in pieces; a new track's lookup waits for it to settle. */
 const LOOKUP_DELAY_MS = 400;
@@ -111,7 +126,7 @@ export const LyricsPanel = GObject.registerClass({
         });
         this._status.add_child(new St.Icon({
             style_class: 'mc-lyrics-status-icon',
-            icon_name: 'media-view-subtitles-symbolic',
+            gicon: lyricsIcon(),
             x_align: Clutter.ActorAlign.CENTER,
         }));
         this._statusLabel = new St.Label({style_class: 'mc-lyrics-status-label'});

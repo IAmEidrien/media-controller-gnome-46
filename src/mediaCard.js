@@ -15,7 +15,7 @@ import { Slider } from 'resource:///org/gnome/shell/ui/slider.js';
 
 import { boxOrientation } from './compat.js';
 import { Equalizer } from './equalizer.js';
-import { LyricsPanel } from './lyricsPanel.js';
+import { LyricsPanel, lyricsIcon } from './lyricsPanel.js';
 import {
     US_PER_SECOND, loopIconName, nextLoopStatus, playPauseIconName,
     seekOffset, setReactive, setToggleStyle, syncHover
@@ -377,7 +377,7 @@ export const MediaCard = GObject.registerClass({
             toggle_mode: true,
             y_align: Clutter.ActorAlign.START,
             accessible_name: _('Lyrics'),
-            child: new St.Icon({icon_name: 'media-view-subtitles-symbolic', icon_size: 16}),
+            child: new St.Icon({gicon: lyricsIcon(), icon_size: 16}),
         });
         this._lyricsButton.child.set_pivot_point(0.5, 0.5);
         this._lyricsButton.connect('notify::checked', () => {

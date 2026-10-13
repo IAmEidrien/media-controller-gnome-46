@@ -10,6 +10,7 @@ SOURCES = $(SRC)/extension.js $(SRC)/prefs.js $(SRC)/mpris.js $(SRC)/mediaCard.j
           $(SRC)/artCache.js $(SRC)/playerIcons.js $(SRC)/scrollingLabel.js \
           $(SRC)/transport.js $(SRC)/paths.js $(SRC)/equalizer.js \
           $(SRC)/compat.js $(SRC)/lyrics.js $(SRC)/lyricsPanel.js \
+          $(SRC)/icons/lyrics-symbolic.svg \
           $(SRC)/metadata.json $(SRC)/stylesheet.css
 
 .PHONY: all schemas install uninstall enable disable pack check shexli clean-shexli logs prefs clean
@@ -84,6 +85,7 @@ pack: schemas
 		--extra-source=compat.js \
 		--extra-source=lyrics.js \
 		--extra-source=lyricsPanel.js \
+		--extra-source=icons \
 		"--extra-source=$(CURDIR)/LICENSE" \
 		--schema=schemas/org.gnome.shell.extensions.media-controller.gschema.xml \
 		--force
