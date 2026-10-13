@@ -409,8 +409,12 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
             return;
 
         /* Ask the schema rather than listing keys here, so a key added later is
-         * reset without anyone remembering to update this. */
-        for (const key of settings.settings_schema.list_keys())
-            settings.reset(key);
+         * reset without anyone remembering to update this. The announced
+         * release is bookkeeping, not an option: resetting it would only
+         * repeat the what's-new notification. */
+        for (const key of settings.settings_schema.list_keys()) {
+            if (key !== 'last-announced-version')
+                settings.reset(key);
+        }
     }
 }

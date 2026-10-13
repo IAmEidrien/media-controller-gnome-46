@@ -16,6 +16,7 @@ import {LyricsSource} from './lyrics.js';
 import {MediaCard} from './mediaCard.js';
 import {MprisManager} from './mpris.js';
 import {ScrollingLabel} from './scrollingLabel.js';
+import {UpdateNotice} from './updateNotice.js';
 import {loopIconName, nextLoopStatus, playPauseIconName, seekOffset,
     setReactive, setToggleStyle} from './transport.js';
 
@@ -417,6 +418,8 @@ export default class MediaControlsExtension extends Extension {
             'changed::panel-position', () => this._reposition(),
             'changed::pause-others-on-play',
             () => this._applyExclusivePlayback(), this);
+
+        this._updateNotice = new UpdateNotice(this, this._settings);
     }
 
     /* LRCLIB asks clients to identify themselves. */
@@ -471,6 +474,9 @@ export default class MediaControlsExtension extends Extension {
         /* The extension has no `destroy` signal, so unlike the indicator this
          * owner needs the explicit disconnect. */
         this._settings.disconnectObject(this);
+
+        this._updateNotice?.destroy();
+        this._updateNotice = null;
 
         this._indicator?.destroy();
         this._indicator = null;

@@ -149,10 +149,16 @@ in on Wayland, because the shell caches ES modules for the life of the process.
 | [src/artCache.js](src/artCache.js)             | Resolves and caches album art               |
 | [src/prefs.js](src/prefs.js)                   | Preferences window                          |
 | [src/compat.js](src/compat.js)                 | Differences between GNOME Shell versions    |
+| [src/updateNotice.js](src/updateNotice.js)     | What's-new notification after an update     |
 
 `mpris.js`, `artCache.js` and `lyrics.js` deliberately import only `gi://`
 modules, never `resource:///org/gnome/shell/…`, so they can be exercised outside
 the shell.
+
+## Credits
+
+- [FrigoreD](https://github.com/FrigoreD) — lyrics in the card, plus fixes for
+  live streams, switching players and the scrolling title.
 
 ## License
 
