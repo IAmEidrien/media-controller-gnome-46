@@ -11,6 +11,8 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {ArtCache} from './artCache.js';
+import {boxOrientation} from './compat.js';
+import {LyricsSource} from './lyrics.js';
 import {MediaCard} from './mediaCard.js';
 import {MprisManager} from './mpris.js';
 import {ScrollingLabel} from './scrollingLabel.js';
@@ -53,7 +55,7 @@ const PANEL_KEYS = [
 
 const MediaIndicator = GObject.registerClass(
 class MediaIndicator extends PanelMenu.Button {
-    _init(extension, settings, artCache, manager) {
+    _init(extension, settings, artCache, lyricsSource, manager) {
         super._init(0.5, 'Media Controls');
 
         this._settings = settings;
@@ -67,7 +69,7 @@ class MediaIndicator extends PanelMenu.Button {
 
         this._box = new St.BoxLayout({
             style_class: 'mc-panel-box',
-            orientation: Clutter.Orientation.HORIZONTAL,
+            ...boxOrientation(Clutter.Orientation.HORIZONTAL),
             y_align: Clutter.ActorAlign.CENTER,
         });
         this.add_child(this._box);
@@ -75,7 +77,7 @@ class MediaIndicator extends PanelMenu.Button {
         this._buildTextBox();
         this._buildControls();
 
-        this._card = new MediaCard(artCache, settings);
+        this._card = new MediaCard(artCache, lyricsSource, settings);
         this._card.connectObject(
             'activated', () => this.menu.close(),
             'open-preferences', () => {
@@ -203,7 +205,7 @@ class MediaIndicator extends PanelMenu.Button {
     _buildTextBox() {
         this._textBox = new St.BoxLayout({
             style_class: 'mc-panel-text',
-            orientation: Clutter.Orientation.HORIZONTAL,
+            ...boxOrientation(Clutter.Orientation.HORIZONTAL),
             y_align: Clutter.ActorAlign.CENTER,
         });
 
@@ -221,7 +223,7 @@ class MediaIndicator extends PanelMenu.Button {
     _buildControls() {
         this._controlsBox = new St.BoxLayout({
             style_class: 'mc-panel-controls',
-            orientation: Clutter.Orientation.HORIZONTAL,
+            ...boxOrientation(Clutter.Orientation.HORIZONTAL),
             y_align: Clutter.ActorAlign.CENTER,
         });
 
@@ -398,9 +400,11 @@ export default class MediaControlsExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
         this._artCache = new ArtCache();
+        this._lyricsSource = new LyricsSource(this._userAgent());
         this._manager = new MprisManager();
         this._applyExclusivePlayback();
-        this._indicator = new MediaIndicator(this, this._settings, this._artCache, this._manager);
+        this._indicator = new MediaIndicator(this, this._settings, this._artCache,
+            this._lyricsSource, this._manager);
 
         const {box, index} = this._placement();
         Main.panel.addToStatusArea(ROLE, this._indicator, index, box);
@@ -413,6 +417,12 @@ export default class MediaControlsExtension extends Extension {
             'changed::panel-position', () => this._reposition(),
             'changed::pause-others-on-play',
             () => this._applyExclusivePlayback(), this);
+    }
+
+    /* LRCLIB asks clients to identify themselves. */
+    _userAgent() {
+        const version = this.metadata['version-name'] ?? this.metadata.version;
+        return `media-controls/${version} (${this.metadata.url})`;
     }
 
     /* The manager does the pausing, but the setting lives here: mpris.js knows
@@ -470,6 +480,9 @@ export default class MediaControlsExtension extends Extension {
 
         this._artCache?.destroy();
         this._artCache = null;
+
+        this._lyricsSource?.destroy();
+        this._lyricsSource = null;
 
         this._settings = null;
     }

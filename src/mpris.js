@@ -10,7 +10,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 
-import {resolvePlayerIcon} from './playerIcons.js';
+import {PlayerKind, resolvePlayerIcon, resolvePlayerKind} from './playerIcons.js';
 
 const GENERIC_ICON = 'audio-x-generic-symbolic';
 
@@ -73,6 +73,7 @@ const PlayerIface = `
     <property name="Shuffle" type="b" access="readwrite"/>
     <property name="Metadata" type="a{sv}" access="read"/>
     <property name="Position" type="x" access="read"/>
+    <property name="Rate" type="d" access="read"/>
     <property name="CanPlay" type="b" access="read"/>
     <property name="CanPause" type="b" access="read"/>
     <property name="CanGoNext" type="b" access="read"/>
@@ -114,6 +115,12 @@ function asNumber(value) {
     return 0;
 }
 
+/** `song.flac` but not `film.mkv`, by the name alone. */
+function isAudioFile(url) {
+    return url.startsWith('file://') &&
+        Gio.content_type_is_a(Gio.content_type_guess(url, null)[0], 'audio/*');
+}
+
 /* Every D-Bus call here can lose a race with the player leaving the bus, and
  * they all fail the same way. Funnelling the warnings through one place keeps
  * the reporting consistent and the logging sparse, as the review guidelines
@@ -133,8 +140,7 @@ export const MprisPlayer = GObject.registerClass({
 
         this.busName = busName;
         this._cancellable = new Gio.Cancellable();
-        this._iconCacheKey = null;
-        this._iconCache = null;
+        this._app = null;
         this._genericIcon = null;
         this._metadata = null;
 
@@ -208,6 +214,12 @@ export const MprisPlayer = GObject.registerClass({
         return asString(this._meta('xesam:artist'));
     }
 
+    get artists() {
+        const value = this._meta('xesam:artist');
+        return (Array.isArray(value) ? value : [value])
+            .filter(artist => typeof artist === 'string' && artist);
+    }
+
     get album() {
         return asString(this._meta('xesam:album'));
     }
@@ -218,6 +230,14 @@ export const MprisPlayer = GObject.registerClass({
 
     get trackId() {
         return asString(this._meta('mpris:trackid'));
+    }
+
+    get url() {
+        return asString(this._meta('xesam:url'));
+    }
+
+    get lyrics() {
+        return asString(this._meta('xesam:asText'));
     }
 
     /** Track length in microseconds, or 0 when the player does not report it. */
@@ -232,6 +252,11 @@ export const MprisPlayer = GObject.registerClass({
 
     get isPlaying() {
         return this.status === 'Playing';
+    }
+
+    get rate() {
+        const rate = this._playerProxy?.Rate;
+        return typeof rate === 'number' && rate > 0 ? rate : 1;
     }
 
     /* Some players omit the Can* properties entirely. Assume the capability is
@@ -296,28 +321,39 @@ export const MprisPlayer = GObject.registerClass({
      * was derived from. Both arrive asynchronously with the app proxy, so the
      * key — not a "resolved once" flag — is what lets a better icon land later.
      */
-    _resolveIcon() {
+    _resolveApp() {
         const key = JSON.stringify([this.desktopEntry, this.identity]);
-        if (this._iconCacheKey !== key) {
-            this._iconCacheKey = key;
-            this._iconCache = resolvePlayerIcon({
+        if (this._app?.key !== key) {
+            const hints = {
                 busName: this.busName,
                 desktopEntry: this.desktopEntry,
                 identity: this.identity,
-            });
+            };
+            this._app = {key, icon: resolvePlayerIcon(hints), kind: resolvePlayerKind(hints)};
         }
-        return this._iconCache;
+        return this._app;
+    }
+
+    get kind() {
+        return this._resolveApp().kind;
+    }
+
+    /* Music players always, browsers never, anything else for local audio files. */
+    get playsMusic() {
+        const kind = this.kind;
+        return kind === PlayerKind.MUSIC ||
+            (kind === PlayerKind.OTHER && isAudioFile(this.url));
     }
 
     /** True when we found the player's real icon rather than a generic one. */
     get hasAppIcon() {
-        return this._resolveIcon() !== null;
+        return this._resolveApp().icon !== null;
     }
 
     /** Best-effort app icon for this player; never null. */
     get appIcon() {
         this._genericIcon ??= Gio.ThemedIcon.new(GENERIC_ICON);
-        return this._resolveIcon() ?? this._genericIcon;
+        return this._resolveApp().icon ?? this._genericIcon;
     }
 
     /* Any of these can race with the player disappearing from the bus, so every

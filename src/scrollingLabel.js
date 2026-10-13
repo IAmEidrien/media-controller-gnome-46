@@ -13,6 +13,8 @@ import GObject from 'gi://GObject';
 import Pango from 'gi://Pango';
 import St from 'gi://St';
 
+import {boxOrientation} from './compat.js';
+
 /* Blank space between the two copies, so the loop reads as a gap rather than
  * the title running straight into itself. */
 const GAP = 32;
@@ -43,7 +45,7 @@ class ScrollingLabel extends St.Widget {
         this._loopId = 0;
 
         this._box = new St.BoxLayout({
-            orientation: Clutter.Orientation.HORIZONTAL,
+            ...boxOrientation(Clutter.Orientation.HORIZONTAL),
             style: `spacing: ${GAP}px;`,
         });
         this._first = new St.Label({style_class: styleClass, y_align: Clutter.ActorAlign.CENTER});

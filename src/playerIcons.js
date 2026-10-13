@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /* playerIcons.js
  *
- * Resolves the icon of the application that is playing. A browser shows the
- * browser's own icon, whatever site is in the tab.
+ * Resolves the icon of the application that is playing, and what kind of app
+ * it is. A browser shows the browser's own icon, whatever site is in the tab.
  *
  * MPRIS players are unreliable about naming themselves: Spotify's Flatpak
  * reports `DesktopEntry=spotify` while its desktop file is
@@ -39,9 +39,13 @@ function slugify(text) {
     return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
-function desktopIcon(name) {
+function desktopApp(name) {
     const id = name.endsWith('.desktop') ? name : `${name}.desktop`;
-    return GioUnix.DesktopAppInfo.new(id)?.get_icon() ?? null;
+    return GioUnix.DesktopAppInfo.new(id);
+}
+
+function desktopIcon(name) {
+    return desktopApp(name)?.get_icon() ?? null;
 }
 
 function themedIcon(iconTheme, name) {
@@ -68,24 +72,32 @@ function idNamesApp(id, wanted) {
 }
 
 /**
- * Find a desktop file whose id names the app, which is how a Flatpak's
+ * Find the desktop files whose id names the app, which is how a Flatpak's
  * reverse-DNS id is reached from the short name the player reports. The id
  * check is what keeps the search from wandering: GNOME's index also matches on
  * Name and Keywords, so a bare word would pull in half the menu.
  */
-function searchedIcon(name) {
+function* searchedApps(name) {
     const wanted = normalize(name);
     if (!wanted || GENERIC_NAMES.has(wanted))
-        return null;
+        return;
 
     for (const group of GioUnix.DesktopAppInfo.search(name)) {
         for (const id of group) {
             if (!idNamesApp(id, wanted))
                 continue;
-            const icon = desktopIcon(id);
-            if (icon)
-                return icon;
+            const app = desktopApp(id);
+            if (app)
+                yield app;
         }
+    }
+}
+
+function searchedIcon(name) {
+    for (const app of searchedApps(name)) {
+        const icon = app.get_icon();
+        if (icon)
+            return icon;
     }
     return null;
 }
@@ -95,9 +107,9 @@ function searchedIcon(name) {
  * @param {string} player.busName bus name the player owns
  * @param {string} player.desktopEntry MPRIS DesktopEntry, often absent
  * @param {string} player.identity MPRIS Identity, a human-readable app name
- * @returns {Gio.Icon | null} null when nothing better than a generic icon exists
+ * @returns {string[]} the names the player might go by, best first
  */
-export function resolvePlayerIcon({busName, desktopEntry, identity}) {
+function candidateNames({busName, desktopEntry, identity}) {
     /* `org.mpris.MediaPlayer2.chromium.instance1234` -> `chromium`, but
      * `org.mpris.MediaPlayer2.io.bassi.Amberol` -> `io.bassi.Amberol`, which is
      * already a desktop id. */
@@ -109,12 +121,25 @@ export function resolvePlayerIcon({busName, desktopEntry, identity}) {
      * project entirely: Google Chrome identifies as "Chrome" while owning
      * `org.mpris.MediaPlayer2.chromium`, and would otherwise wear Chromium's
      * icon on a machine that has both. */
-    const candidates = [desktopEntry, slugify(identity ?? ''), busSlug];
+    return [desktopEntry, slugify(identity ?? ''), busSlug].filter(Boolean);
+}
 
+function findApp(player) {
+    for (const name of candidateNames(player)) {
+        const app = desktopApp(name) ?? searchedApps(name).next().value;
+        if (app)
+            return app;
+    }
+    return null;
+}
+
+/**
+ * @param {object} player the hints candidateNames() takes
+ * @returns {Gio.Icon | null} null when nothing better than a generic icon exists
+ */
+export function resolvePlayerIcon(player) {
     const iconTheme = new St.IconTheme();
-    for (const name of candidates) {
-        if (!name)
-            continue;
+    for (const name of candidateNames(player)) {
         const icon = desktopIcon(name) ??
             themedIcon(iconTheme, name) ??
             searchedIcon(name);
@@ -122,4 +147,28 @@ export function resolvePlayerIcon({busName, desktopEntry, identity}) {
             return icon;
     }
     return null;
+}
+
+export const PlayerKind = Object.freeze({
+    MUSIC: 'music',
+    BROWSER: 'browser',
+    OTHER: 'other',
+});
+
+/**
+ * Classify a player by its desktop file's categories. A browser can be playing
+ * anything, and an app declaring Video plays films too, whatever else it
+ * declares.
+ *
+ * @param {object} player the hints candidateNames() takes
+ * @returns {string} a PlayerKind
+ */
+export function resolvePlayerKind(player) {
+    const categories = new Set(findApp(player)?.get_categories()?.split(';'));
+    if (categories.has('WebBrowser'))
+        return PlayerKind.BROWSER;
+    if (!categories.has('Video') && !categories.has('TV') &&
+        (categories.has('Audio') || categories.has('Music')))
+        return PlayerKind.MUSIC;
+    return PlayerKind.OTHER;
 }

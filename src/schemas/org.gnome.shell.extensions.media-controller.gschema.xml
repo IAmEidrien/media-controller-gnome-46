@@ -171,6 +171,18 @@
       <description>Only shown for players that support looping. Cycles between off, the whole queue, and one track.</description>
     </key>
 
+    <key name="card-show-lyrics-button" type="b">
+      <default>true</default>
+      <summary>Show the lyrics button in the card</summary>
+      <description>A button beside the card's settings button that shows the lyrics of the current song, following along line by line when they are timed. Only shown for music players, and for local audio files in players that also play video.</description>
+    </key>
+
+    <key name="lyrics-online-lookup" type="b">
+      <default>true</default>
+      <summary>Look up lyrics on LRCLIB</summary>
+      <description>When neither the player nor an .lrc file beside the track has lyrics, ask lrclib.net. The track's title, artist, album and length are sent, and only while the lyrics are open.</description>
+    </key>
+
     <key name="seek-step-seconds" type="i">
       <default>10</default>
       <range min="2" max="20"/>

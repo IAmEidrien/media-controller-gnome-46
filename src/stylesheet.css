@@ -169,6 +169,11 @@
   background-color: rgba(127, 127, 127, 0.25);
 }
 
+/* Lit while the lyrics are open, like an engaged shuffle or loop. */
+.mc-lyrics-button:checked StIcon {
+  color: -st-accent-color;
+}
+
 /* ---------- Equalizer ---------- */
 
 /* Height is fixed so the bars grow from a steady baseline without reflowing the
@@ -185,6 +190,57 @@
   width: 3px;
   border-radius: 2px;
   background-color: -st-accent-color;
+}
+
+/* ---------- Lyrics ---------- */
+
+/* Fixed, so the controls below do not jump while lyrics load. */
+.mc-lyrics {
+  height: 240px;
+}
+
+.mc-lyrics-scroll {
+  -st-vfade-offset: 36px;
+}
+
+.mc-lyrics-lines {
+  spacing: 2px;
+}
+
+/* Lines are dimmed through opacity, never weight, so they do not rewrap as
+ * they light up. */
+.mc-lyrics-line {
+  padding: 4px 8px;
+  border-radius: 10px;
+  font-size: 1.15em;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.mc-lyrics-line:hover {
+  background-color: rgba(127, 127, 127, 0.2);
+}
+
+.mc-lyrics-plain {
+  padding: 0 8px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.mc-lyrics-status {
+  spacing: 8px;
+  padding: 0 24px;
+}
+
+.mc-lyrics-status-icon {
+  icon-size: 32px;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.mc-lyrics-status-label {
+  font-size: 0.9em;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
 }
 
 /* ---------- Seek bar ---------- */
