@@ -29,6 +29,7 @@ function fixture() {
     const ui = {};
     for (const method of ['toggleMenu', 'closeMenu', 'openPreferences', 'refresh'])
         ui[method] = () => calls.push([method]);
+    ui.cyclePlayer = direction => calls.push(['cyclePlayer', direction]);
     return {player, calls, ui, act: action => activatePanelAction(action, player, ui)};
 }
 
@@ -42,6 +43,7 @@ test('all Media Controls click choices reach the selected player or menu', () =>
         shuffle: [['setShuffle', true], ['refresh']],
         menu: [['toggleMenu']], raise: [['closeMenu'], ['raise']],
         quit: [['closeMenu'], ['quit']], preferences: [['closeMenu'], ['openPreferences']],
+        'previous-player': [['cyclePlayer', -1]], 'next-player': [['cyclePlayer', 1]],
     };
     assert.deepEqual(Array.from(CLICK_ACTIONS), Object.keys(expected));
     for (const action of CLICK_ACTIONS) {
@@ -53,7 +55,7 @@ test('all Media Controls click choices reach the selected player or menu', () =>
 
 test('missing players and unsupported capabilities make shortcuts harmless', () => {
     const f = fixture();
-    for (const action of CLICK_ACTIONS.filter(action => !['menu', 'preferences'].includes(action)))
+    for (const action of CLICK_ACTIONS.filter(action => !['menu', 'preferences', 'previous-player', 'next-player'].includes(action)))
         activatePanelAction(action, null, f.ui);
     assert.deepEqual(f.calls, []);
     activatePanelAction('menu', null, f.ui);
@@ -62,7 +64,7 @@ test('missing players and unsupported capabilities make shortcuts harmless', () 
     f.calls.length = 0;
     for (const capability of Object.keys(f.player).filter(key => key.startsWith('can')))
         f.player[capability] = false;
-    for (const action of CLICK_ACTIONS.filter(action => !['menu', 'preferences'].includes(action)))
+    for (const action of CLICK_ACTIONS.filter(action => !['menu', 'preferences', 'previous-player', 'next-player'].includes(action)))
         f.act(action);
     assert.deepEqual(f.calls, []);
     // Each individual capability also matters when CanControl itself is true.
@@ -78,6 +80,14 @@ test('missing players and unsupported capabilities make shortcuts harmless', () 
     f.player.canRaise = true;
     f.act('raise');
     assert.deepEqual(f.calls, [['closeMenu'], ['raise']], 'application interface is independent');
+});
+
+test('player cycling is independent of the current player and playback capabilities', () => {
+    const f = fixture();
+    activatePanelAction('next-player', null, f.ui);
+    f.player.canControl = false;
+    f.act('previous-player');
+    assert.deepEqual(f.calls, [['cyclePlayer', 1], ['cyclePlayer', -1]]);
 });
 
 test('play/pause respects the current state, rather than checking only CanPlay', () => {

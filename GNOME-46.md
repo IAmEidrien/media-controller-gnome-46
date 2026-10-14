@@ -26,7 +26,9 @@ see the README. A separate UUID prevents replacement by the upstream extension.
 The schema ID and path are unchanged. Version `2.4-gnome46.2` added panel click
 actions and a symbolic-icon preference; `2.4-gnome46.3` added scroll actions.
 Version `2.4-gnome46.4` adds theme accents and optional maintenance tools;
-it does not change the schema XML. Compile with `make schemas` whenever the
+it does not change the schema XML. Version `2.4-gnome46.5` adds looping player
+selection actions and configurable mouse Back/Forward bindings, with defaults
+of Previous/Next player. This version changes the schema XML. Compile with `make schemas` whenever the
 XML changes, and do not commit the compiled binary. JavaScript/CSS-only
 updates need no build, but loaded modules require a new Shell session.
 The optional `make watch-updates` helper compiles schemas after Git updates;
@@ -42,15 +44,34 @@ Media Controls: nothing, play/pause, play, pause, next/previous, player volume
 up/down (5 percentage points, clamped to 0–100%), repeat, shuffle, menu, focus
 player, quit player, and preferences. Defaults are left/menu, middle/focus,
 right/play-pause. Touch uses the left-click action. Transport buttons retain
-their own behavior; extra mouse buttons and releases trigger no shortcuts.
+their own behavior. Back (button 8) and Forward (button 9) use their configured
+actions on the icon/track-information area; other extra buttons and releases
+trigger no shortcuts.
 Player actions use the selected player and respect its MPRIS capabilities.
 
-Scroll up and Scroll down appear after the three click selectors, with the
+Previous player and Next player use the same ready-player roster and selection
+policy as the menu, wrapping in both directions. Paused players remain eligible;
+cycling never changes playback or opens/closes the menu. With fewer than two
+ready players, it does nothing. Switching is independent of the current player's
+playback capabilities. Existing action enum values are preserved; the two new
+values are appended.
+
+Scroll up and Scroll down appear after the five click selectors, with the
 same action choices and defaults of player volume up/down. Scrolling applies
 anywhere on the panel indicator, including over transport buttons. Vertical
 smooth input accumulates into whole steps, and horizontal input is ignored.
 Partial input is cleared when the pointer leaves, direction reverses, the
-selected player changes, or preferences change. No additional timers are used.
+selected player changes externally, or preferences change. Cycling through a
+scroll action preserves the ongoing gesture's fractional remainder across its
+own player selections. No additional timers are used.
+
+This update also ports upstream's pause acknowledgement fix from
+[`df2b44f`](https://github.com/naimur900/media-controller-gnome/commit/df2b44f5260d189235077eb46263a49fa5e27f6e).
+When Pause is still in flight, browser metadata changes must not be interpreted
+as playback starting again. The manager waits for the player's reported Paused
+status instead of setting its status bookkeeping optimistically. This is a
+targeted backport; the upstream baseline remains 2.4 rather than claiming a
+complete merge of newer releases.
 
 **Prefer symbolic icons** is directly below Player icon and is disabled when
 Player icon is off. It defaults on, using the same `-st-icon-style: symbolic`
@@ -88,6 +109,13 @@ the transport buttons still work. With Papirus, check symbolic player icons,
 then turn the preference off and back on. A player without a symbolic variant
 should retain its colored icon. Also switch icon themes while the extension is
 enabled, and toggle Player icon off to check the dependent preference row.
+
+Check Back/Forward with at least two players, including a paused one: cycle in
+both directions and across the endpoints, then play/pause and adjust the newly
+selected player's volume. Try cycling from a middle-click or scroll binding;
+check smooth input, live remapping, a player exiting and the zero/one-player
+cases. With pause-others enabled, start music while a browser is playing and
+verify that late browser updates do not pause the newly started music.
 
 For the new theme integration, try a red slider accent or the explicit CSS
 override, then reload the Shell theme. Check timestamps, equalizer, seek fill,

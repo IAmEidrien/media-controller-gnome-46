@@ -53,7 +53,7 @@ function clickActionLabels() {
         _('Next track'), _('Previous track'), _('Player volume up'),
         _('Player volume down'), _('Cycle repeat mode'), _('Toggle shuffle'),
         _('Open / close menu'), _('Focus player'), _('Quit player'),
-        _('Open preferences'),
+        _('Open preferences'), _('Previous player'), _('Next player'),
     ];
 }
 
@@ -139,6 +139,10 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
         actions.add(this._comboRow(settings, 'middle-click-action', _('Middle click'),
             CLICK_ACTIONS, clickActionLabels()));
         actions.add(this._comboRow(settings, 'right-click-action', _('Right click'),
+            CLICK_ACTIONS, clickActionLabels()));
+        actions.add(this._comboRow(settings, 'back-click-action', _('Back button'),
+            CLICK_ACTIONS, clickActionLabels()));
+        actions.add(this._comboRow(settings, 'forward-click-action', _('Forward button'),
             CLICK_ACTIONS, clickActionLabels()));
         actions.add(this._comboRow(settings, 'scroll-up-action', _('Scroll up'),
             CLICK_ACTIONS, clickActionLabels()));

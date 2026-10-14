@@ -20,6 +20,9 @@ import {loopIconName, nextLoopStatus, playPauseIconName, seekOffset,
     setToggleStyle} from './transport.js';
 
 const ROLE = 'media-controls';
+// Conventional extra mouse buttons; wheel events remain separate scroll input.
+const BUTTON_BACK = 8;
+const BUTTON_FORWARD = 9;
 
 /* `atEnd` positions are appended after everything already in that panel box —
  * for "far right" that means past the quick settings menu. */
@@ -46,6 +49,8 @@ const PANEL_KEYS = [
     'left-click-action',
     'middle-click-action',
     'right-click-action',
+    'back-click-action',
+    'forward-click-action',
     'scroll-up-action',
     'scroll-down-action',
     'show-title',
@@ -155,6 +160,8 @@ class MediaIndicator extends PanelMenu.Button {
             leftClickAction: settings.get_string('left-click-action'),
             middleClickAction: settings.get_string('middle-click-action'),
             rightClickAction: settings.get_string('right-click-action'),
+            backClickAction: settings.get_string('back-click-action'),
+            forwardClickAction: settings.get_string('forward-click-action'),
             scrollUpAction: settings.get_string('scroll-up-action'),
             scrollDownAction: settings.get_string('scroll-down-action'),
             showTitle: settings.get_boolean('show-title'),
@@ -215,6 +222,12 @@ class MediaIndicator extends PanelMenu.Button {
         case Clutter.BUTTON_SECONDARY:
             action = this._prefs.rightClickAction;
             break;
+        case BUTTON_BACK:
+            action = this._prefs.backClickAction;
+            break;
+        case BUTTON_FORWARD:
+            action = this._prefs.forwardClickAction;
+            break;
         default:
             return Clutter.EVENT_PROPAGATE;
         }
@@ -230,6 +243,7 @@ class MediaIndicator extends PanelMenu.Button {
             closeMenu: () => this.menu.close(),
             openPreferences: () => this._extension.openPreferences(),
             refresh: () => this.sync(),
+            cyclePlayer: direction => this._manager.cyclePlayer(direction),
         });
         return Clutter.EVENT_STOP;
     }
@@ -275,6 +289,10 @@ class MediaIndicator extends PanelMenu.Button {
         this._scrollDelta -= steps;
         for (let i = 0; i < Math.abs(steps); i++)
             this._activateAction(action);
+        // Cycling itself changes the selected player. Keep this gesture's
+        // remainder; an external selection still resets it on the next event.
+        if (action === 'previous-player' || action === 'next-player')
+            this._scrollPlayer = this._manager.activePlayer;
         return Clutter.EVENT_STOP;
     }
 

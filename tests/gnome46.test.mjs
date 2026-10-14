@@ -162,6 +162,7 @@ function fixture() {
     const manager = new Signals();
     manager.activePlayer = null;
     manager.readyPlayers = [];
+    manager.cyclePlayer = () => {};
     let preferencesOpened = 0;
     const indicator = new MediaIndicator({openPreferences() { preferencesOpened++; }}, settings,
         {resolve: async () => null}, manager);
@@ -243,7 +244,7 @@ test('default panel shortcuts route each button once, preserving transport and t
     f.indicator._playButton.emit('clicked');
     assert.equal(calls.length, 3);
     f.indicator.vfunc_event(event(1, 3));
-    f.indicator.vfunc_event(event(8));
+    f.indicator.vfunc_event(event(10));
     assert.equal(calls.length, 3, 'release and extra buttons are ignored');
     f.indicator.vfunc_event(event(undefined, 2));
     assert.equal(f.indicator.menu.isOpen, true, 'touch follows primary mapping');
@@ -269,9 +270,9 @@ test('Panel preferences order, schema choices and dependent symbolic switch stay
         ['Placement', 'Actions', 'Playback controls', 'Track information', 'Scrolling text']);
     const actions = panel.children[1];
     assert.deepEqual(actions.children.map(row => row.title),
-        ['Left click', 'Middle click', 'Right click', 'Scroll up', 'Scroll down']);
+        ['Left click', 'Middle click', 'Right click', 'Back button', 'Forward button', 'Scroll up', 'Scroll down']);
     assert.deepEqual(actions.children.map(row => row.model[row.selected]),
-        ['Open / close menu', 'Focus player', 'Play / pause', 'Player volume up', 'Player volume down']);
+        ['Open / close menu', 'Focus player', 'Play / pause', 'Previous player', 'Next player', 'Player volume up', 'Player volume down']);
     const schema = readFileSync(new URL('schemas/org.gnome.shell.extensions.media-controller.gschema.xml', root), 'utf8');
     const enumXml = schema.match(/<enum id="[^\"]+\.click-action">([\s\S]*?)<\/enum>/)[1];
     const nicks = [...enumXml.matchAll(/nick="([^\"]+)"/g)].map(match => match[1]);
@@ -298,6 +299,62 @@ test('Panel preferences order, schema choices and dependent symbolic switch stay
     f.values['show-player-icon'] = true;
     f.settings.emit('changed::show-player-icon');
     assert.equal(symbolic.sensitive, true);
+});
+
+test('side buttons cycle by default and accept every shared action via live settings', () => {
+    const f = fixture();
+    f.indicator._card.setPlayer = () => {};
+    f.indicator._card.setPlayers = () => {};
+    const cycles = [];
+    f.manager.cyclePlayer = direction => cycles.push(direction);
+    const click = button => f.indicator.vfunc_event({
+        type: () => f.api.Clutter.EventType.BUTTON_PRESS,
+        get_button: () => button, get_coords: () => [50, 10],
+    });
+    assert.equal(click(8), f.api.Clutter.EVENT_STOP);
+    assert.equal(click(9), f.api.Clutter.EVENT_STOP);
+    assert.deepEqual(cycles, [-1, 1]);
+    assert.equal(f.indicator.menu.isOpen, false);
+    f.settings.set_string('forward-click-action', 'menu');
+    click(9);
+    assert.equal(f.indicator.menu.isOpen, true);
+    f.settings.set_string('back-click-action', 'none');
+    assert.equal(click(8), f.api.Clutter.EVENT_PROPAGATE);
+    assert.deepEqual(cycles, [-1, 1]);
+});
+
+test('smooth player cycling keeps gesture fractions across its own selections', () => {
+    const f = fixture();
+    f.indicator._card.setPlayer = () => {};
+    f.indicator._card.setPlayers = () => {};
+    const players = [{id: 0}, {id: 1}, {id: 2}];
+    let index = 0;
+    f.manager.activePlayer = players[index];
+    const cycles = [];
+    f.manager.cyclePlayer = direction => {
+        cycles.push(direction);
+        index = (index + direction + players.length) % players.length;
+        f.manager.activePlayer = players[index];
+    };
+    f.settings.set_string('scroll-down-action', 'next-player');
+    f.settings.set_string('scroll-up-action', 'previous-player');
+    const smooth = dy => f.indicator.vfunc_event({
+        type: () => f.api.Clutter.EventType.SCROLL,
+        get_scroll_direction: () => f.api.Clutter.ScrollDirection.SMOOTH,
+        get_scroll_delta: () => [0, dy],
+    });
+    smooth(1.5);
+    smooth(0.5);
+    assert.deepEqual(cycles, [1, 1]);
+    assert.equal(f.manager.activePlayer, players[2]);
+    smooth(-2);
+    assert.deepEqual(cycles, [1, 1, -1, -1]);
+    assert.equal(f.manager.activePlayer, players[0]);
+    smooth(0.75);
+    f.manager.activePlayer = players[1];
+    smooth(0.25);
+    assert.equal(cycles.length, 4, 'external selection clears the fraction');
+    assert.equal(f.indicator.menu.isOpen, false);
 });
 
 test('symbolic preference changes only the panel icon style, retaining its real icon and size', () => {

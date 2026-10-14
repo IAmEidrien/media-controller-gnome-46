@@ -6,11 +6,15 @@ import {nextLoopStatus} from './transport.js';
 export const CLICK_ACTIONS = [
     'none', 'play-pause', 'play', 'pause', 'next', 'previous',
     'volume-up', 'volume-down', 'loop', 'shuffle', 'menu', 'raise',
-    'quit', 'preferences',
+    'quit', 'preferences', 'previous-player', 'next-player',
 ];
 
 /** Act on the selected player, respecting the capabilities it advertises. */
 export function activatePanelAction(action, player, ui) {
+    if (action === 'previous-player' || action === 'next-player') {
+        ui.cyclePlayer(action === 'next-player' ? 1 : -1);
+        return;
+    }
     if (action === 'menu') {
         ui.toggleMenu();
         return;

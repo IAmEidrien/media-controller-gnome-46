@@ -35,6 +35,8 @@
     <value nick="raise" value="11"/>
     <value nick="quit" value="12"/>
     <value nick="preferences" value="13"/>
+    <value nick="previous-player" value="14"/>
+    <value nick="next-player" value="15"/>
   </enum>
 
   <schema id="org.gnome.shell.extensions.media-controller"
@@ -76,6 +78,20 @@
       <default>'volume-up'</default>
       <summary>Action when scrolling up on the panel indicator</summary>
       <description>Uses the same actions as panel clicks. Volume actions affect the selected player's volume in 5 percentage point steps, not system volume.</description>
+    </key>
+
+    <key name="back-click-action"
+         enum="org.gnome.shell.extensions.media-controller.click-action">
+      <default>'previous-player'</default>
+      <summary>Action for the mouse Back button on the panel indicator</summary>
+      <description>Mouse button 8. Defaults to the previous ready player, wrapping around the roster without changing playback.</description>
+    </key>
+
+    <key name="forward-click-action"
+         enum="org.gnome.shell.extensions.media-controller.click-action">
+      <default>'next-player'</default>
+      <summary>Action for the mouse Forward button on the panel indicator</summary>
+      <description>Mouse button 9. Defaults to the next ready player, wrapping around the roster without changing playback.</description>
     </key>
 
     <key name="scroll-down-action"

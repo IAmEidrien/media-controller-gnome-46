@@ -25,6 +25,13 @@ testing from syntax checks or mocked constructors.
 - Panel shortcuts apply to the selected player and must not intercept transport
   controls. Player-volume shortcuts affect MPRIS Volume, not system volume.
   Keep the Actions group after Placement in the Panel preferences.
+- Back/Forward defaults are Previous/Next player. Player cycling belongs to
+  the shared action list, uses the ready-player roster with wraparound, and must
+  not change playback or depend on CanControl. Preserve scroll fractions across
+  selections caused by the gesture itself; external player changes still clear
+  them. Keep old schema action enum numbers stable.
+- When pausing other players, wait for the reported status. Optimistically
+  recording Paused can misread delayed browser updates as a new playback start.
 - Prefer symbolic icons through Shell's icon-theme lookup, preserving the
   original GIcon as fallback. Keep this preference panel-only, immediately
   below Player icon, and disable its row while Player icon is off.
