@@ -1,7 +1,7 @@
 # Media Controller: GNOME 46 public fork
 
 This is a compatibility and convenience fork of `naimur900/media-controller-gnome`,
-based on upstream `0d7caf289ade7d3ee109c38d5d259bc50f4ef2a3` (2.4). Preserve
+based on upstream `0c726520bb91c8c2619a6ac2b38ce601b8133b8c` (2.5). Preserve
 upstream ancestry, copyright notices, and the GPL-2.0-or-later license.
 
 The target is Linux Mint 22 / GNOME Shell 46 on Wayland, with GLib 2.80 and
@@ -20,6 +20,8 @@ testing from syntax checks or mocked constructors.
 - Theme accents use the standard slider fill through St.ThemeNode color lookup,
   with an optional `-media-controller-accent-color` override and blue fallback.
   Preserve theme listener cleanup, artwork styles/sizing, and neutral icons.
+- Preserve the lyrics icon in package/install manifests. Online lyrics lookup stays
+  opt-in; keep stale-response guards, timer cleanup, and metadata/local LRC lookup.
 - Preserve fixed icon/artwork sizing, MPRIS capabilities, player selection,
   seek behavior, timer/signal cleanup, and cancellation of artwork downloads.
 - Panel shortcuts apply to the selected player and must not intercept transport

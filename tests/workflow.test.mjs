@@ -16,7 +16,7 @@ function fixture(t) {
     const installed = join(temp, 'installed');
     mkdirSync(source);
     for (const name of readdirSync(root)) {
-        if (name.endsWith('.js') || ['Makefile', 'metadata.json', 'stylesheet.css', 'LICENSE', 'schemas'].includes(name))
+        if (name.endsWith('.js') || ['Makefile', 'metadata.json', 'stylesheet.css', 'LICENSE', 'schemas', 'icons'].includes(name))
             cpSync(join(root, name), join(source, name), {recursive: true});
     }
     return {
@@ -39,7 +39,7 @@ test('package and copy installation contain a complete flat runtime', t => {
     assert.equal(entries.status, 0, entries.stderr);
     const names = JSON.parse(entries.stdout);
     const required = readdirSync(root).filter(name => name.endsWith('.js'));
-    required.push('metadata.json', 'stylesheet.css', 'LICENSE',
+    required.push('icons/lyrics-symbolic.svg', 'metadata.json', 'stylesheet.css', 'LICENSE',
         'schemas/gschemas.compiled', 'schemas/org.gnome.shell.extensions.media-controller.gschema.xml');
     assert.deepEqual([...names].sort(), required.sort());
     const installed = f.make('install');

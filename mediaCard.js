@@ -13,10 +13,12 @@ import St from 'gi://St';
 import { gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.js';
 import { Slider } from 'resource:///org/gnome/shell/ui/slider.js';
 
+import { boxOrientation } from './compat.js';
 import { Equalizer } from './equalizer.js';
+import { LyricsPanel, lyricsIcon } from './lyricsPanel.js';
 import {
     US_PER_SECOND, loopIconName, nextLoopStatus, playPauseIconName,
-    seekOffset, setToggleStyle
+    seekOffset, setReactive, setToggleStyle, syncHover
 } from './transport.js';
 
 const POSITION_POLL_SECONDS = 1;
@@ -89,6 +91,18 @@ function iconButton(iconName, styleClass) {
     });
 }
 
+/* Press feedback: shrink, then spring back past full size. */
+function pop(actor) {
+    actor.remove_all_transitions();
+    actor.set_scale(0.7, 0.7);
+    actor.ease({
+        scale_x: 1,
+        scale_y: 1,
+        duration: 300,
+        mode: Clutter.AnimationMode.EASE_OUT_BACK,
+    });
+}
+
 export const MediaCard = GObject.registerClass({
     Signals: {
         /* Raised the player's window; the menu should close. */
@@ -99,10 +113,10 @@ export const MediaCard = GObject.registerClass({
         'player-selected': {param_types: [GObject.TYPE_STRING]},
     },
 }, class MediaCard extends St.BoxLayout {
-    _init(artCache, settings) {
+    _init(artCache, lyricsSource, settings) {
         super._init({
             style_class: 'mc-card',
-            vertical: true,
+            ...boxOrientation(Clutter.Orientation.VERTICAL),
             x_expand: true,
         });
 
@@ -129,6 +143,7 @@ export const MediaCard = GObject.registerClass({
 
         this._buildSwitcher();
         this._buildHeader();
+        this._buildLyrics(lyricsSource);
         this._buildSeekBar();
         this._buildControls();
 
@@ -138,6 +153,7 @@ export const MediaCard = GObject.registerClass({
             this._settings.connect('changed::card-show-seek-buttons', () => this.sync()),
             this._settings.connect('changed::card-show-shuffle', () => this.sync()),
             this._settings.connect('changed::card-show-loop', () => this.sync()),
+            this._settings.connect('changed::card-show-lyrics-button', () => this.sync()),
             this._settings.connect('changed::card-show-player-switcher',
                 () => this._updateSwitcher()),
             this._settings.connect('changed::card-width', () => this._applyWidth()),
@@ -157,7 +173,7 @@ export const MediaCard = GObject.registerClass({
     _buildSwitcher() {
         this._switcherBox = new St.BoxLayout({
             style_class: 'mc-player-tabs',
-            vertical: true,
+            ...boxOrientation(Clutter.Orientation.VERTICAL),
             y_align: Clutter.ActorAlign.START,
             visible: false,
         });
@@ -289,7 +305,7 @@ export const MediaCard = GObject.registerClass({
     _buildHeader() {
         const header = new St.BoxLayout({
             style_class: 'mc-card-header',
-            vertical: false,
+            ...boxOrientation(Clutter.Orientation.HORIZONTAL),
         });
 
         /* The artwork is the card's "go to the app" target: clicking it raises
@@ -322,7 +338,7 @@ export const MediaCard = GObject.registerClass({
 
         const textBox = new St.BoxLayout({
             style_class: 'mc-card-text',
-            vertical: true,
+            ...boxOrientation(Clutter.Orientation.VERTICAL),
             y_align: Clutter.ActorAlign.CENTER,
             x_expand: true,
         });
@@ -348,7 +364,7 @@ export const MediaCard = GObject.registerClass({
          * underneath either of them. */
         const actions = new St.BoxLayout({
             style_class: 'mc-card-actions',
-            vertical: true,
+            ...boxOrientation(Clutter.Orientation.VERTICAL),
             y_expand: true,
             x_align: Clutter.ActorAlign.END,
         });
@@ -364,23 +380,39 @@ export const MediaCard = GObject.registerClass({
         });
         this._prefsButton.connect('clicked', () => this.emit('open-preferences'));
 
-        /* The top of the column: the stack of player tabs, then the gear in the
-         * corner. With one player the tabs are hidden and this is the gear on
-         * its own, exactly as before. */
+        this._lyricsButton = new St.Button({
+            style_class: 'mc-app-button mc-lyrics-button',
+            can_focus: true,
+            toggle_mode: true,
+            y_align: Clutter.ActorAlign.START,
+            accessible_name: _('Lyrics'),
+            child: new St.Icon({gicon: lyricsIcon(), icon_size: 16}),
+        });
+        this._lyricsButton.child.set_pivot_point(0.5, 0.5);
+        this._lyricsButton.connect('notify::checked', () => {
+            pop(this._lyricsButton.child);
+            setToggleStyle(this._lyricsButton, this._lyricsButton.checked, this._accentColor);
+            this._lyrics.setOpen(this._lyricsButton.checked);
+            this._onLyricsTimingChanged();
+        });
+
+        /* The top of the column: the stack of player tabs, then the lyrics
+         * button and the gear in the corner. */
         const topRow = new St.BoxLayout({
             style_class: 'mc-card-actions-top',
-            vertical: false,
+            ...boxOrientation(Clutter.Orientation.HORIZONTAL),
             x_align: Clutter.ActorAlign.END,
             y_align: Clutter.ActorAlign.START,
         });
         topRow.add_child(this._switcherBox);
+        topRow.add_child(this._lyricsButton);
         topRow.add_child(this._prefsButton);
         actions.add_child(topRow);
 
         /* Expanding is what pushes this off the gear and centres it. */
         const status = new St.BoxLayout({
             style_class: 'mc-card-status',
-            vertical: false,
+            ...boxOrientation(Clutter.Orientation.HORIZONTAL),
             x_align: Clutter.ActorAlign.END,
             y_align: Clutter.ActorAlign.CENTER,
             y_expand: true,
@@ -394,10 +426,27 @@ export const MediaCard = GObject.registerClass({
         this.add_child(header);
     }
 
+    _buildLyrics(source) {
+        this._lyrics = new LyricsPanel(source, this._settings);
+        this._lyrics.connect('seek-requested', (_panel, position) => {
+            this._player?.setPosition(position);
+            this._refreshPositionSoon();
+        });
+        this._lyrics.connect('timing-changed', () => this._onLyricsTimingChanged());
+        this.add_child(this._lyrics);
+    }
+
+    /* Timed lyrics need the position polled, and want it now. */
+    _onLyricsTimingChanged() {
+        this._updateTimer();
+        if (this._lyrics.wantsPosition)
+            this._refreshPosition();
+    }
+
     _buildSeekBar() {
         this._seekBox = new St.BoxLayout({
             style_class: 'mc-seek-box',
-            vertical: true,
+            ...boxOrientation(Clutter.Orientation.VERTICAL),
         });
 
         this._slider = new Slider(0);
@@ -433,7 +482,7 @@ export const MediaCard = GObject.registerClass({
 
         const times = new St.BoxLayout({
             style_class: 'mc-time-box',
-            vertical: false,
+            ...boxOrientation(Clutter.Orientation.HORIZONTAL),
         });
         this._positionLabel = new St.Label({
             style_class: 'mc-time',
@@ -461,7 +510,7 @@ export const MediaCard = GObject.registerClass({
          * the row, underneath the play button.) */
         const row = new St.BoxLayout({
             style_class: 'mc-controls-row',
-            vertical: false,
+            ...boxOrientation(Clutter.Orientation.HORIZONTAL),
         });
 
         this._shuffleButton = iconButton('media-playlist-shuffle-symbolic',
@@ -476,7 +525,7 @@ export const MediaCard = GObject.registerClass({
 
         const controls = new St.BoxLayout({
             style_class: 'mc-card-controls',
-            vertical: false,
+            ...boxOrientation(Clutter.Orientation.HORIZONTAL),
             x_expand: true,
             x_align: Clutter.ActorAlign.CENTER,
             y_align: Clutter.ActorAlign.CENTER,
@@ -584,6 +633,7 @@ export const MediaCard = GObject.registerClass({
             this._playerSignals.push(player.connect('seeked', (_p, position) => {
                 this._position = position;
                 this._updateSlider();
+                this._lyrics.setPosition(position);
             }));
         }
 
@@ -604,16 +654,17 @@ export const MediaCard = GObject.registerClass({
     setActive(active) {
         this._active = active;
         this._equalizer.setActive(active);
+        this._lyrics.setActive(active);
         this._updateTimer();
         if (active)
             this._refreshPosition();
     }
 
-    /* Polling exists to move the seek bar. No seek bar on screen, no polling —
-     * every tick is a D-Bus round trip. */
+    /* Polling exists to move the seek bar and timed lyrics. With neither on
+     * screen, no polling — every tick is a D-Bus round trip. */
     _updateTimer() {
-        const wanted = this._active && this._seekBox.visible &&
-            this._player?.isPlaying;
+        const wanted = this._active && this._player?.isPlaying &&
+            (this._seekBox.visible || this._lyrics.wantsPosition);
 
         if (wanted && !this._timeoutId) {
             this._timeoutId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT,
@@ -635,11 +686,13 @@ export const MediaCard = GObject.registerClass({
             /* The D-Bus round trip can outlive a drag starting, the player it
              * was issued for, or the card itself (destroy nulls `_player`) — a
              * late answer from the previous track would otherwise be painted
-             * onto this one's slider. */
-            if (this._dragging || this._player !== player)
+             * onto this one's slider. A failed read keeps the last known
+             * position rather than snapping the slider and lyrics to 0. */
+            if (position === null || this._dragging || this._player !== player)
                 return;
             this._position = position;
             this._updateSlider();
+            this._lyrics.setPosition(position);
         });
     }
 
@@ -734,6 +787,8 @@ export const MediaCard = GObject.registerClass({
             this._loopButton.visible = false;
             this._equalizer.visible = false;
             this._equalizer.setPlaying(false);
+            this._lyricsButton.visible = false;
+            this._lyrics.update(null);
             this._length = 0;
             this._updateArt();
             this._updateTimer();
@@ -785,6 +840,13 @@ export const MediaCard = GObject.registerClass({
         setToggleStyle(this._loopButton,
             player.canLoop && player.loopStatus !== 'None', this._accentColor);
 
+        /* Lyrics are for songs, not browser tabs or films. */
+        const showLyrics = this._settings.get_boolean('card-show-lyrics-button') &&
+            player.playsMusic;
+        this._lyricsButton.visible = showLyrics;
+        setToggleStyle(this._lyricsButton, this._lyricsButton.checked, this._accentColor);
+        this._lyrics.update(showLyrics ? player : null);
+
         this._updateArt();
         this._updateSlider();
         this._updateTimer();
@@ -803,7 +865,7 @@ export const MediaCard = GObject.registerClass({
     /* Setting `reactive` is enough: St maps it to the `:insensitive` pseudo
      * class, which the theme already styles. */
     _setSensitive(actor, sensitive) {
-        actor.reactive = sensitive;
+        setReactive(actor, sensitive);
     }
 
     /**
@@ -815,9 +877,12 @@ export const MediaCard = GObject.registerClass({
      * @param {string} identity names the target for screen readers
      */
     _setRaisable(raisable, identity = '') {
-        this._artButton.reactive = raisable;
-        this._artButton.can_focus = raisable;
-        this._artButton.track_hover = raisable;
+        if (this._artButton.reactive !== raisable) {
+            this._artButton.can_focus = raisable;
+            this._artButton.track_hover = raisable;
+            setReactive(this._artButton, raisable);
+            syncHover(this._artButton);
+        }
         this._artButton.accessible_name = raisable ? identity : '';
         this._applyArtStyle();
     }

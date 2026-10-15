@@ -10,6 +10,7 @@ const root = new URL('../', import.meta.url);
 function load(file, names, api) {
     const source = readFileSync(new URL(file, root), 'utf8')
         .replace(/^import[\s\S]*?;\s*$/gm, '')
+        .replace(/import\.meta\.url/g, JSON.stringify(new URL(file, root).href))
         .replace(/export default class/g, 'class')
         .replace(/export (?=(const|class|function)\b)/g, '');
     return vm.runInNewContext(`(() => { ${source}; return {${names.join(',')}}; })()`, api);
@@ -70,6 +71,10 @@ class Actor extends Signals {
     has_style_class_name(name) { return this.classes.has(name); }
     add_css_class(name) { this.classes.add(name); }
     remove_all_transitions() {}
+    set_pivot_point() {}
+    set_scale() {}
+    ease(params) { Object.assign(this, params); }
+    contains(actor) { return actor === this || this.children.some(child => child.contains(actor)); }
     get_transformed_position() { return [100, 0]; }
     get_transformed_size() { return [80, 30]; }
     destroy_all_children() { for (const child of this.children) child.destroy(); this.children = []; }
@@ -121,12 +126,17 @@ function fixture() {
             this.menu = new Menu();
         }
     }
+    const shellSettings = Object.assign(new Signals(), {enable_animations: false});
+    class ScrollView extends Actor {
+        _init(params) { super._init(params); this.vadjustment = new Actor(); }
+    }
     const api = {
         _: text => text,
         global: {stage: {}},
         St: {Widget: Actor, BoxLayout, Button: Actor, Icon: Actor, Label: Actor,
-            Settings: {get: () => ({enable_animations: false})}},
-        Clutter: {ActorAlign: {CENTER: 0, START: 1, END: 2},
+            ScrollView, PolicyType: {NEVER: 0, EXTERNAL: 1},
+            Settings: {get: () => shellSettings}},
+        Clutter: {Orientation: {HORIZONTAL: 0, VERTICAL: 1}, ActorAlign: {CENTER: 0, START: 1, END: 2},
             EventType: {BUTTON_PRESS: 1, TOUCH_BEGIN: 2, BUTTON_RELEASE: 3, SCROLL: 4},
             ScrollDirection: {UP: 0, DOWN: 1, LEFT: 2, RIGHT: 3, SMOOTH: 4},
             BUTTON_PRIMARY: 1, BUTTON_MIDDLE: 2, BUTTON_SECONDARY: 3,
@@ -139,8 +149,9 @@ function fixture() {
             SwitchRow: Actor, ComboRow: Actor, SpinRow: Actor},
         Gtk: {Button: Actor, Adjustment: Actor, Align: {CENTER: 0},
             StringList: {new: labels => labels}},
-        Gio: {SettingsBindFlags: {DEFAULT: 0, GET: 1}, FileQueryInfoFlags: {NONE: 0}},
-        GLib: {PRIORITY_DEFAULT: 0},
+        Gio: {FileIcon: Actor, File: {new_for_uri: () => ({get_parent: () => ({resolve_relative_path: path => path})})}, SettingsBindFlags: {DEFAULT: 0, GET: 1}, FileQueryInfoFlags: {NONE: 0}},
+        GLib: {PRIORITY_DEFAULT: 0, get_monotonic_time: () => 0,
+            timeout_add: () => 1, timeout_add_seconds: () => 2, Source: {remove() {}}},
         Extension: class {},
         ExtensionPreferences: class {getSettings() { return settings; }},
         Slider: Actor,
@@ -152,8 +163,10 @@ function fixture() {
         }),
     };
     Object.assign(api, load('transport.js', ['US_PER_SECOND', 'loopIconName', 'nextLoopStatus',
-        'playPauseIconName', 'seekOffset', 'setToggleStyle'], api));
+        'playPauseIconName', 'seekOffset', 'setToggleStyle', 'setReactive', 'syncHover'], api));
     Object.assign(api, load('panelActions.js', ['CLICK_ACTIONS', 'activatePanelAction'], api));
+    Object.assign(api, load('compat.js', ['boxOrientation'], api));
+    Object.assign(api, load('lyricsPanel.js', ['LyricsPanel', 'lyricsIcon'], api));
     Object.assign(api, load('equalizer.js', ['Equalizer'], api));
     Object.assign(api, load('scrollingLabel.js', ['ScrollingLabel'], api));
     Object.assign(api, load('mediaCard.js', ['MediaCard'], api));
@@ -165,10 +178,88 @@ function fixture() {
     manager.cyclePlayer = () => {};
     let preferencesOpened = 0;
     const indicator = new MediaIndicator({openPreferences() { preferencesOpened++; }}, settings,
-        {resolve: async () => null}, manager);
+        {resolve: async () => null}, {lookup: async () => null}, manager);
     return {api, values, settings, indicator, manager, boxes, MediaControlsPreferences,
         preferencesOpened: () => preferencesOpened};
 }
+
+test('upstream hover repair clears insensitive controls and restores hover under the pointer', () => {
+    const f = fixture();
+    const actor = new Actor({reactive: true, track_hover: true, mapped: true, hover: true});
+    const child = new Actor();
+    actor.add_child(child);
+    f.api.global.get_pointer = () => [25, 30];
+    f.api.Clutter.PickMode = {REACTIVE: 1};
+    f.api.global.stage.get_actor_at_pos = () => child;
+    f.api.setReactive(actor, false);
+    assert.equal(actor.hover, false);
+    f.api.setReactive(actor, true);
+    assert.equal(actor.hover, true);
+    f.api.global.stage.get_actor_at_pos = () => new Actor();
+    f.api.syncHover(actor);
+    assert.equal(actor.hover, false);
+});
+
+test('a finished one-pass scrolling title is not restarted by hover or menu style changes', () => {
+    const f = fixture();
+    const label = f.indicator._label;
+    label._scrolling = true;
+    label._text = 'A title that is much too long to fit';
+    label._width = 20;
+    let starts = 0;
+    label._start = () => starts++;
+    label._update(true);
+    assert.equal(starts, 1);
+    label._showStatic();
+    label._first.emit('style-changed');
+    assert.equal(starts, 1);
+    f.api.St.Settings.get().emit('notify::enable-animations');
+    assert.equal(starts, 2, 'an accessibility animation change can restart it');
+    label.destroy();
+    f.api.St.Settings.get().emit('notify::enable-animations');
+    assert.equal(starts, 2, 'destroy disconnects the settings listener');
+});
+
+test('lyrics reject stale track responses and clean up settings on destruction', async () => {
+    const f = fixture();
+    const panel = f.indicator._card._lyrics;
+    panel._open = panel._active = true;
+    const track = title => ({busName: 'player', title, artists: ['Artist'], album: '',
+        length: 100e6, url: '', lyrics: '', rate: 1, isPlaying: false});
+    let finish;
+    panel._source = {lookup: () => new Promise(resolve => { finish = resolve; })};
+    panel.update(track('First'));
+    const oldLookup = panel._lookup();
+    panel.update(track('Second'));
+    finish({synced: false, lines: [{time: null, text: 'Stale first lyrics'}]});
+    await oldLookup;
+    assert.equal(panel._statusLabel.text, 'Looking for lyrics…');
+    assert.equal(panel._linesBox.children.length, 0);
+    panel._source = {lookup: async () => ({synced: false,
+        lines: [{time: null, text: 'Second lyrics'}]})};
+    await panel._lookup();
+    assert.equal(panel._linesBox.children[0].text, 'Second lyrics');
+    panel.destroy();
+    assert.ok([...f.settings.listeners.values()].every(listener => listener.owner !== panel));
+    assert.equal(panel._timers.size, 0);
+});
+
+test('failed position polls retain the last position and lyrics toggle follows theme accents', async () => {
+    const f = fixture();
+    const card = f.indicator._card;
+    card._player = {getPosition: async () => null};
+    card._position = 123456;
+    card._refreshPosition();
+    await Promise.resolve();
+    assert.equal(card._position, 123456);
+    card._accentColor = 'rgba(224, 27, 36, 1)';
+    card._lyricsButton.checked = true;
+    card._lyricsButton.emit('notify::checked');
+    assert.equal(card._lyricsButton.child.style, 'color: rgba(224, 27, 36, 1);');
+    card._lyricsButton.checked = false;
+    card._lyricsButton.emit('notify::checked');
+    assert.equal(card._lyricsButton.child.style, null);
+});
 
 test('panel, card, scrolling label and equalizer construct with GNOME 46 box properties', () => {
     const f = fixture();

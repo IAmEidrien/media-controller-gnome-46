@@ -48,6 +48,7 @@ def verify_fork(root):
         raise RuntimeError('Merge introduced a known post-GNOME-46 API; manual adaptation is required.')
     schema = (root / f'schemas/{SCHEMA}.gschema.xml').read_text()
     for key in ['left-click-action', 'middle-click-action', 'right-click-action',
+                'back-click-action', 'forward-click-action',
                 'scroll-up-action', 'scroll-down-action', 'prefer-symbolic-icons']:
         if f'name="{key}"' not in schema:
             raise RuntimeError(f'Merge removed fork setting {key}.')

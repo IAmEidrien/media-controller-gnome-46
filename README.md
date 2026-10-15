@@ -29,6 +29,14 @@ Rhythmbox, mpv, and so on.
   <img src="public/img-1.png" alt="Upstream panel indicator and now-playing card" width="700">
 </p>
 
+## Upstream 2.5
+
+Includes upstream 2.5's lyrics panel, live-stream seeking fixes, hover-state fixes,
+and scrolling-title improvements, while retaining the GNOME 46 adaptations and
+configurable panel actions. Lyrics can come from player metadata or a nearby
+`.lrc` file. Online lookup through [LRCLIB](https://lrclib.net) is off by default;
+enabling it sends track information when the lyrics panel is opened.
+
 ## Features
 
 - **Panel indicator** showing the player icon, track title and artist, in a
@@ -184,6 +192,8 @@ in on Wayland, because the shell caches ES modules for the life of the process.
 | [extension.js](extension.js)           | Panel indicator, menu, panel placement      |
 | [accentColor.js](accentColor.js)       | GNOME 46 theme color lookup and refresh     |
 | [panelActions.js](panelActions.js)     | Configurable panel shortcuts and capability checks |
+| [lyrics.js](lyrics.js)                 | Lyrics sources and LRC parsing              |
+| [lyricsPanel.js](lyricsPanel.js)       | Timed and plain lyrics view                  |
 | [mediaCard.js](mediaCard.js)           | The now-playing card                        |
 | [scrollingLabel.js](scrollingLabel.js) | The fixed-width panel label and its marquee |
 | [mpris.js](mpris.js)                   | MPRIS2 D-Bus client and player tracking     |
@@ -192,6 +202,11 @@ in on Wayland, because the shell caches ES modules for the life of the process.
 
 `mpris.js` and `artCache.js` deliberately import only `gi://` modules, never
 `resource:///org/gnome/shell/…`, so they can be exercised outside the shell.
+
+## Credits
+
+[FrigoreD](https://github.com/FrigoreD) contributed upstream lyrics support and
+fixes for live streams, switching players, and scrolling titles.
 
 ## License
 

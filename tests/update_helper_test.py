@@ -67,6 +67,16 @@ class UpdateHelperTest(unittest.TestCase):
         self.assertEqual((self.root / 'schemas/gschemas.compiled').read_bytes(), before)
         self.assertEqual(self.state.read_text(), state)
 
+    def test_bundled_icon_updates_are_runtime_changes_without_schema_recompilation(self):
+        self.update(notify=False)
+        (self.root / 'icons').mkdir()
+        icon = self.root / 'icons/lyrics-symbolic.svg'
+        icon.write_text('<svg/>')
+        self.assertEqual(self.update(notify=False), (True, False))
+        self.assertEqual(self.update(notify=False), (False, False))
+        icon.write_text('<svg><!-- changed --></svg>')
+        self.assertEqual(self.update(notify=False), (True, False))
+
     def test_busy_git_checkout_is_not_compiled(self):
         (self.root / '.git/index.lock').write_text('busy')
         with patch.object(helper.time, 'sleep'), self.assertRaisesRegex(RuntimeError, 'Git is still'):

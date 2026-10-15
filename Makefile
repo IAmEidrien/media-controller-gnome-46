@@ -8,6 +8,7 @@ ZIP     = $(UUID).shell-extension.zip
 # reused across runs, since building it hits the network.
 SHEXLI_VENV = .shexli-venv
 SOURCES = $(wildcard *.js) metadata.json stylesheet.css LICENSE
+ASSETS = $(wildcard icons/*.svg)
 SCHEMAS = $(wildcard schemas/*.gschema.xml)
 
 .PHONY: all schemas install uninstall enable disable pack check test watch-updates unwatch-updates shexli clean-shexli logs prefs clean
@@ -23,8 +24,9 @@ $(SRC)/schemas/gschemas.compiled: $(SRC)/schemas/*.gschema.xml
 # A checkout installed directly is updated with Gitpulsar Pull, not copied over.
 install: schemas
 	@test ! -e "$(INSTALL_DIR)/.git" || { echo "Git checkout: use Pull in Gitpulsar instead."; exit 1; }
-	mkdir -p "$(INSTALL_DIR)/schemas"
+	mkdir -p "$(INSTALL_DIR)/schemas" "$(INSTALL_DIR)/icons"
 	cp $(SOURCES) "$(INSTALL_DIR)/"
+	cp $(ASSETS) "$(INSTALL_DIR)/icons/"
 	cp $(SCHEMAS) schemas/gschemas.compiled "$(INSTALL_DIR)/schemas/"
 	@echo "Installed to $(INSTALL_DIR)"
 	@echo "Now log out and back in (Wayland), then: make enable"
@@ -84,7 +86,7 @@ clean-shexli:
 
 pack: schemas
 	rm -f "$(ZIP)"
-	zip -q "$(ZIP)" $(SOURCES) $(SCHEMAS) schemas/gschemas.compiled
+	zip -q "$(ZIP)" $(SOURCES) $(ASSETS) $(SCHEMAS) schemas/gschemas.compiled
 
 # Live extension logs. Ctrl-C to stop.
 logs:

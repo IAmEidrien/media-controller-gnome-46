@@ -171,6 +171,22 @@ function mprisFixture() {
         playerProxy, appProxy, calls, warnings, xml};
 }
 
+test('live-stream sentinel durations are discarded and playback rate has a safe fallback', () => {
+    const f = mprisFixture();
+    let length = 10e6;
+    f.player._metadata = {'mpris:length': {deep_unpack: () => length}};
+    assert.equal(f.player.length, 10e6);
+    for (length of [0, -1, Infinity, NaN, 9223372036854775807n])
+        assert.equal(f.player.length, 0);
+    assert.match(f.xml[0], /name="Rate" type="d" access="read"/);
+    f.playerProxy.Rate = 1.5;
+    assert.equal(f.player.rate, 1.5);
+    for (const rate of [undefined, 0, -1, Infinity, NaN]) {
+        f.playerProxy.Rate = rate;
+        assert.equal(f.player.rate, 1);
+    }
+});
+
 test('MPRIS actions call the declared interfaces, guard capabilities and tolerate player departure', () => {
     const f = mprisFixture();
     assert.match(f.xml[0], /name="Volume" type="d" access="readwrite"/);

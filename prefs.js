@@ -265,6 +265,18 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
             _('Shown at the right edge of the controls. Cycles between off, the whole queue, and one track.')));
         page.add(playback);
 
+        const lyrics = new Adw.PreferencesGroup({
+            title: _('Lyrics'),
+            description: _('A button beside the settings button shows the words of the current song. Timed lyrics follow along line by line, and clicking a line plays from there. Shown for music players only — not for browsers, nor for films in video players.'),
+        });
+        lyrics.add(this._switchRow(settings, 'card-show-lyrics-button',
+            _('Lyrics button')));
+        lyrics.add(this._bindSensitive(settings, 'card-show-lyrics-button',
+            this._switchRow(settings, 'lyrics-online-lookup',
+                _('Look up lyrics online'),
+                _('When the player has none and there is no .lrc file beside the track, search LRCLIB (lrclib.net). The title, artist, album and length of the track are sent, and only while the lyrics are open.'))));
+        page.add(lyrics);
+
         return page;
     }
 
@@ -446,8 +458,12 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
             return;
 
         /* Ask the schema rather than listing keys here, so a key added later is
-         * reset without anyone remembering to update this. */
-        for (const key of settings.settings_schema.list_keys())
-            settings.reset(key);
+         * reset without anyone remembering to update this. The announced
+         * release is bookkeeping, not an option: resetting it would only
+         * repeat the what's-new notification. */
+        for (const key of settings.settings_schema.list_keys()) {
+            if (key !== 'last-announced-version')
+                settings.reset(key);
+        }
     }
 }

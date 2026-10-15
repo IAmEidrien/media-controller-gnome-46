@@ -32,7 +32,7 @@ def fingerprint(files, root):
 
 def runtime_files(root):
     return [*root.glob('*.js'), root / 'metadata.json', root / 'stylesheet.css',
-            *root.glob('schemas/*.gschema.xml')]
+            *root.glob('schemas/*.gschema.xml'), *root.glob('icons/*.svg')]
 
 
 def state_path():

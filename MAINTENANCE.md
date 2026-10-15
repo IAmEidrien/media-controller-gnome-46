@@ -46,7 +46,7 @@ Gitpulsar or `git pull`. It installs three small **systemd user units**:
   notification response never blocks the next compilation.
 
 There is no polling daemon, automatic Git pull, root service, or forced logout.
-Only this extension's runtime and schemas are fingerprinted. Documentation-only
+Only this extension's runtime, bundled icons and schemas are fingerprinted. Documentation-only
 updates produce no restart notice. The helper skips an unfinished Git operation,
 retries through systemd, and keeps the previous compiled binary if new schema
 XML is invalid. Its state lives under
@@ -113,7 +113,7 @@ accent need no extra rule. Use User Themes to load/reload the Shell theme; on
 Wayland, restarting the session is a reliable way to reload edited theme CSS.
 Browser `var(--accent-color)` syntax and the newer `-st-accent-color` color value
 are not available here. Normal symbolic icons retain the theme's foreground;
-only engaged shuffle/repeat icons receive the accent.
+only engaged shuffle/repeat and lyrics icons receive the accent.
 
 References: [GNOME 46 slider theme](https://github.com/GNOME/gnome-shell/blob/46.0/data/theme/gnome-shell-sass/widgets/_slider.scss)
 and [GNOME 46 theme-node color lookup](https://github.com/GNOME/gnome-shell/blob/46.0/src/st/st-theme-node.c).

@@ -1,6 +1,6 @@
 # GNOME 46 compatibility and workflow
 
-The upstream version is 2.4 at `0d7caf2`. Changing `shell-version` alone would
+The upstream version is 2.5 at `0c72652`. Changing `shell-version` alone would
 leave these incompatibilities:
 
 | Upstream API | GNOME 46 adaptation |
@@ -33,6 +33,21 @@ XML changes, and do not commit the compiled binary. JavaScript/CSS-only
 updates need no build, but loaded modules require a new Shell session.
 The optional `make watch-updates` helper compiles schemas after Git updates;
 see [MAINTENANCE.md](MAINTENANCE.md) for setup, upstream syncing and theme overrides.
+
+## Upstream 2.5 integration
+
+Version `2.5-gnome46.1` merges upstream 2.5 with its ancestry intact. It includes
+lyrics (metadata, adjacent LRC files, and optional LRCLIB lookup), live-stream
+length/seek handling, hover-state repairs, scrolling-title fixes, and the
+release notification. The lyrics toggle uses the fork's theme accent lookup.
+The new layout helper deliberately returns GNOME 46's `vertical` property.
+The new icon is included in ZIPs, copied installs and update fingerprints.
+Online lyrics lookup remains off by default. This release adds schema keys:
+run `make schemas` after Pull unless the optional update helper handles it.
+
+The automated sync stopped for manual review of upstream Makefile and icon
+changes. This merge retains those guards; subsequent syncs recognize 2.5 as
+already merged rather than retrying its structural changes.
 
 ## Panel conveniences
 
@@ -69,9 +84,8 @@ This update also ports upstream's pause acknowledgement fix from
 [`df2b44f`](https://github.com/naimur900/media-controller-gnome/commit/df2b44f5260d189235077eb46263a49fa5e27f6e).
 When Pause is still in flight, browser metadata changes must not be interpreted
 as playback starting again. The manager waits for the player's reported Paused
-status instead of setting its status bookkeeping optimistically. This is a
-targeted backport; the upstream baseline remains 2.4 rather than claiming a
-complete merge of newer releases.
+status instead of setting its status bookkeeping optimistically. That fix is
+now included through the complete upstream 2.5 merge.
 
 **Prefer symbolic icons** is directly below Player icon and is disabled when
 Player icon is off. It defaults on, using the same `-st-icon-style: symbolic`
@@ -122,3 +136,11 @@ override, then reload the Shell theme. Check timestamps, equalizer, seek fill,
 engaged shuffle/repeat icons, and artwork hover/focus borders. Ordinary player
 icons should keep their own style. Test the optional helper on the desktop
 after a Pull, including dismissing its notice and opening logout confirmation.
+
+For 2.5, also open lyrics on a music player, test plain and timed local lyrics,
+click a timed line, switch tracks while a lookup is pending, and close/reopen
+the card. Enable online lookup only if wanted. A browser/live stream should
+not acquire a lyrics button or bogus seek duration. Check that completed
+one-pass title scrolling does not restart on hover and that hover highlights
+clear after a control becomes insensitive. The release notice should appear
+once, and clicking it should open preferences.
