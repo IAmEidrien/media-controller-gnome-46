@@ -15,14 +15,14 @@ import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 
 /* The release the notes below describe. Bump both together for a release worth
  * announcing; a release that leaves them alone stays quiet. */
-const RELEASE = '2.6';
+const RELEASE = '3.0';
 
 function releaseNotes() {
     return [
-        _('Timed lyrics are found for more songs, rather than plain text.'),
-        _('The card expands smoothly when the lyrics open, and shrinks back when they close.'),
-        _('Lyrics without timings are laid out like timed ones: centered, line by line.'),
-        _('The height of the lyrics can be set in the preferences, and the card always fits on screen.'),
+        _('A volume bar along the bottom of the card sets the volume of the player itself.'),
+        _('Beside it, the player’s name opens a list of every running player, with what each is playing, to switch between.'),
+        _('Players go by their proper names, such as Firefox and Google Chrome.'),
+        _('Album art is bigger at every size, and the card is wider by default.'),
     ].map(line => `• ${line}`).join('\n');
 }
 

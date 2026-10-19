@@ -13,9 +13,11 @@ import St from 'gi://St';
 import { gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.js';
 import { Slider } from 'resource:///org/gnome/shell/ui/slider.js';
 
+import { cssUrl } from './artCache.js';
 import { boxOrientation } from './compat.js';
 import { Equalizer } from './equalizer.js';
 import { LyricsPanel, lyricsIcon } from './lyricsPanel.js';
+import { PlayerList } from './playerList.js';
 import {
     US_PER_SECOND, loopIconName, nextLoopStatus, playPauseIconName,
     seekOffset, setReactive, setToggleStyle, syncHover
@@ -30,21 +32,23 @@ const POSITION_POLL_SECONDS = 1;
  * still does the real work, this only stops the pathological case. */
 const MAX_TITLE_CHARS = 120;
 
-/* How many player icons the switcher draws. Three keeps the row narrow enough
- * to share the card's top line with the gear; a session with more players than
- * that is one where the row would otherwise become the loudest thing on the
- * card. */
-const MAX_VISIBLE_TABS = 3;
+/* The player list rises out of the player button: this much air between the
+ * two, at least this much between the list and the card's edges, and this far
+ * it slides in from. */
+const LIST_GAP = 6;
+const LIST_INSET = 10;
+const LIST_SLIDE = 12;
+const LIST_MS = 180;
 
 /* Keyed by the `card-art-size` enum nick. `icon` sizes the fallback player icon
  * so it keeps roughly the same inset as the artwork it stands in for, and the
  * radius tracks the size so the corners stay proportionally round. */
 const ART_SIZES = {
-    'small': {size: 64, radius: 12, icon: 28},
-    'medium': {size: 88, radius: 16, icon: 40},
-    'large': {size: 120, radius: 20, icon: 56},
+    'small': {size: 80, radius: 14, icon: 36},
+    'medium': {size: 104, radius: 18, icon: 46},
+    'large': {size: 136, radius: 22, icon: 60},
 };
-const DEFAULT_ART_SIZE = 'medium';
+const DEFAULT_ART_SIZE = 'large';
 
 /* How long the volume slider stops following the player after the user moves
  * it. Every write comes back as a PropertiesChanged a moment later, and those
@@ -92,11 +96,6 @@ function formatTime(micros) {
     return `${minutes}:${pad(seconds)}`;
 }
 
-/** St parses this as CSS, so a path with a quote in it must not break out. */
-function cssUrl(path) {
-    return `url("${path.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}")`;
-}
-
 /* Secondary text; opacity keeps it legible in both light and dark themes,
  * which a hardcoded color would not. */
 const DIM_OPACITY = 160;
@@ -123,22 +122,76 @@ function pop(actor) {
     });
 }
 
+/* The layer the player list floats in. It asks for no room, so the list can
+ * never hold the card open: as the list faded out over a card whose lyrics
+ * were closing — switching to a browser, say — the card used to stay at its
+ * old height, centring the header in it, and then snap shut. And it seats the
+ * list on every allocation, so the list rides the player button wherever the
+ * card's height moves it. */
+const ListLayer = GObject.registerClass(
+class ListLayer extends St.Widget {
+    /**
+     * @param {object} list the PlayerList
+     * @param {Function} anchor returns the y, in the layer's coordinates, that
+     *   the list's bottom edge sits on
+     */
+    _init(list, anchor) {
+        super._init({x_expand: true, y_expand: true, visible: false});
+        this._list = list;
+        this._anchor = anchor;
+        this.add_child(list);
+    }
+
+    vfunc_get_preferred_width(_forHeight) {
+        return [0, 0];
+    }
+
+    vfunc_get_preferred_height(_forWidth) {
+        return [0, 0];
+    }
+
+    vfunc_allocate(box) {
+        this.set_allocation(box);
+
+        /* No taller than the room above the button; a longer list scrolls. */
+        const width = Math.max(0, box.get_width() - 2 * LIST_INSET);
+        const bottom = this._anchor() - LIST_GAP;
+        const [, natural] = this._list.get_preferred_height(width);
+        const height = Math.min(natural, Math.max(0, bottom - LIST_INSET));
+        this._list.allocate(Clutter.ActorBox.new(
+            LIST_INSET, bottom - height, LIST_INSET + width, bottom));
+    }
+});
+
 export const MediaCard = GObject.registerClass({
     Signals: {
         /* Raised the player's window; the menu should close. */
         'activated': {},
         /* The gear button was pressed. */
         'open-preferences': {},
-        /* A switcher tab was pressed; carries the player's MPRIS bus name. */
+        /* A player was picked from the list; carries its MPRIS bus name. */
         'player-selected': {param_types: [GObject.TYPE_STRING]},
     },
-}, class MediaCard extends St.BoxLayout {
+}, class MediaCard extends St.Widget {
     _init(artCache, lyricsSource, settings) {
+        /* Two layers: the card's content, and above it the player list with
+         * the scrim behind it, which float over the content when open. */
         super._init({
             style_class: 'mc-card',
-            ...boxOrientation(Clutter.Orientation.VERTICAL),
+            layout_manager: new Clutter.BinLayout(),
             x_expand: true,
         });
+
+        /* Held to the top at its own height. Filling a card that is briefly
+         * taller than it would stretch the header, whose action column
+         * expands, and slide the artwork down to the middle. */
+        this._content = new St.BoxLayout({
+            style_class: 'mc-card-content',
+            ...boxOrientation(Clutter.Orientation.VERTICAL),
+            x_expand: true,
+            y_align: Clutter.ActorAlign.START,
+        });
+        this.add_child(this._content);
 
         this._artCache = artCache;
         this._settings = settings;
@@ -159,17 +212,17 @@ export const MediaCard = GObject.registerClass({
         this._artSize = ART_SIZES[DEFAULT_ART_SIZE];
         this._length = 0;
         this._position = 0;
-        this._roster = [];
-        this._tabs = new Map();
-        this._tabsKey = null;
-        this._activeBusName = null;
+        this._players = [];
+        this._activePlayer = null;
+        this._playerListOpen = false;
+        this._focusBeforeList = null;
 
-        this._buildSwitcher();
         this._buildHeader();
         this._buildLyrics(lyricsSource);
         this._buildSeekBar();
         this._buildControls();
-        this._buildVolume();
+        this._buildFooter();
+        this._buildPlayerList();
 
         this._settingsSignals = [
             this._settings.connect('changed::card-show-art', () => this.sync()),
@@ -180,7 +233,7 @@ export const MediaCard = GObject.registerClass({
             this._settings.connect('changed::card-show-volume', () => this.sync()),
             this._settings.connect('changed::card-show-lyrics-button', () => this.sync()),
             this._settings.connect('changed::card-show-player-switcher',
-                () => this._updateSwitcher()),
+                () => this._updatePicker()),
             this._settings.connect('changed::card-width', () => this._applyWidth()),
             this._settings.connect('changed::lyrics-height', () => this._applyLyricsHeight()),
             this._settings.connect('changed::card-art-size', () => this._applyArtSize()),
@@ -191,20 +244,6 @@ export const MediaCard = GObject.registerClass({
         this.connect('destroy', () => this._onDestroy());
     }
 
-    /* One tab per running player, stacked into a column left of the gear in the
-     * header's action column. Hidden — and left empty — whenever there is
-     * nothing to switch between, which is the usual case, so the card pays
-     * nothing for the feature until a second player shows up. `_buildHeader`
-     * parents it. */
-    _buildSwitcher() {
-        this._switcherBox = new St.BoxLayout({
-            style_class: 'mc-player-tabs',
-            ...boxOrientation(Clutter.Orientation.VERTICAL),
-            y_align: Clutter.ActorAlign.START,
-            visible: false,
-        });
-    }
-
     /**
      * Hand the card the players it can switch between. Called on every sync, so
      * it does as little as possible when nothing has moved.
@@ -213,119 +252,32 @@ export const MediaCard = GObject.registerClass({
      * @param {object|null} active the one currently on screen
      */
     setPlayers(players, active) {
-        this._roster = players;
-        this._activeBusName = active?.busName ?? null;
-        this._updateSwitcher();
+        this._players = players;
+        this._activePlayer = active;
+        this._playerList.setPlayers(players, active?.busName ?? null);
+        this._updatePicker();
     }
 
-    _updateSwitcher() {
-        const players = this._roster;
-        /* One player is not a choice, and zero is the idle card. */
-        const show = players.length > 1 &&
-            this._settings.get_boolean('card-show-player-switcher');
+    /* The button names the player on screen whenever there is one. Only with a
+     * second player is there a choice to make; until then it is a plain name
+     * tag, with no arrow and nothing to press. */
+    _updatePicker() {
+        const player = this._activePlayer;
+        const show = !!player && this._settings.get_boolean('card-show-player-switcher');
+        const choice = show && this._players.length > 1;
 
-        this._switcherBox.visible = show;
-        if (!show) {
-            this._clearTabs();
-            return;
+        this._pickerButton.visible = show;
+        if (show) {
+            this._pickerIcon.gicon = player.appIcon;
+            this._pickerLabel.text = player.displayName;
         }
+        this._pickerArrow.visible = choice;
+        this._pickerButton.can_focus = choice;
+        setReactive(this._pickerButton, choice);
 
-        const visible = this._visibleTabs(players);
-
-        /* Rebuilding drops keyboard focus and restarts the button's hover
-         * transitions, so it happens only when the row itself changes — not on
-         * every metadata update from the player that is playing. */
-        const key = visible.map(player => player.busName).join('\n');
-        if (key !== this._tabsKey)
-            this._rebuildTabs(visible, key);
-
-        for (const player of visible) {
-            const tab = this._tabs.get(player.busName);
-            if (!tab)
-                continue;
-
-            /* Both of these resolve asynchronously with the app proxy, so a tab
-             * built a moment ago may still be showing a generic icon and no
-             * name at all. The name is the tab's only label — nothing is drawn
-             * beside the icon — so it also carries the accessible name. */
-            tab.icon.gicon = player.appIcon;
-            tab.button.accessible_name = player.identity;
-
-            /* The one on screen is fully lit; the others recede. */
-            const isActive = player.busName === this._activeBusName;
-            tab.icon.opacity = isActive ? 255 : DIM_OPACITY;
-            if (isActive !== tab.button.has_style_class_name('mc-player-tab-active')) {
-                if (isActive)
-                    tab.button.add_style_class_name('mc-player-tab-active');
-                else
-                    tab.button.remove_style_class_name('mc-player-tab-active');
-            }
-        }
-    }
-
-    /**
-     * At most MAX_VISIBLE_TABS icons; any further players are simply not drawn,
-     * which keeps the row beside the gear from growing without bound.
-     *
-     * Which ones survive: the player on screen always — the row reports which
-     * player the card is following, so leaving that one out is the one thing it
-     * must never do — and then the most recently opened, since a player that
-     * has been sitting in a background tab since this morning is the one you
-     * are least likely to reach for. `players` arrives oldest first and the row
-     * keeps that order, so the icons do not shuffle around between syncs.
-     *
-     * @param {object[]} players every player the switcher was given
-     * @returns {object[]} the ones to draw an icon for
-     */
-    _visibleTabs(players) {
-        if (players.length <= MAX_VISIBLE_TABS)
-            return players;
-
-        const recent = players.slice(-MAX_VISIBLE_TABS);
-        if (recent.some(player => player.busName === this._activeBusName))
-            return recent;
-
-        const active = players.find(player => player.busName === this._activeBusName);
-        if (!active)
-            return recent;
-
-        /* The player on screen is older than all of these, so it goes in front
-         * and the oldest of them makes room. */
-        return [active, ...recent.slice(1)];
-    }
-
-    _rebuildTabs(players, key) {
-        this._clearTabs();
-        this._tabsKey = key;
-
-        for (const player of players) {
-            /* Icons only: names would make each tab as wide as the player is
-             * called, and the row is meant to stay a strip rather than become a
-             * list. The identity goes on the button as its accessible name. */
-            const icon = new St.Icon({icon_size: 16});
-            const button = new St.Button({
-                style_class: 'mc-player-tab',
-                can_focus: true,
-                x_align: Clutter.ActorAlign.CENTER,
-                child: icon,
-            });
-
-            /* The bus name, not the player object: by the time this fires the
-             * player may have quit, and the manager is the one that knows. */
-            const {busName} = player;
-            button.connect('clicked', () => this.emit('player-selected', busName));
-
-            this._switcherBox.add_child(button);
-            this._tabs.set(busName, {button, icon});
-        }
-    }
-
-    _clearTabs() {
-        if (this._tabs.size === 0)
-            return;
-        this._switcherBox.destroy_all_children();
-        this._tabs.clear();
-        this._tabsKey = null;
+        if (!choice)
+            this._closePlayerList();
+        this._updateFooter();
     }
 
     _buildHeader() {
@@ -375,7 +327,7 @@ export const MediaCard = GObject.registerClass({
         textBox.add_child(this._albumLabel);
         header.add_child(textBox);
 
-        /* A full-height column down the right edge: the player tabs and the
+        /* A full-height column down the right edge: the lyrics button and the
          * gear on the top line, and the equalizer centred against the art. The
          * track text is a column of its own beside this one, so it never runs
          * underneath either of them. */
@@ -386,9 +338,6 @@ export const MediaCard = GObject.registerClass({
             x_align: Clutter.ActorAlign.END,
         });
 
-        /* Pinned to the top of the row rather than centred in it: the tab
-         * column beside it is as tall as there are players, and a centred gear
-         * would slide down the card as players come and go. */
         this._prefsButton = new St.Button({
             style_class: 'mc-app-button',
             can_focus: true,
@@ -412,15 +361,14 @@ export const MediaCard = GObject.registerClass({
             this._onLyricsTimingChanged();
         });
 
-        /* The top of the column: the stack of player tabs, then the lyrics
-         * button and the gear in the corner. */
+        /* The top of the column: the lyrics button, then the gear in the
+         * corner. */
         const topRow = new St.BoxLayout({
             style_class: 'mc-card-actions-top',
             ...boxOrientation(Clutter.Orientation.HORIZONTAL),
             x_align: Clutter.ActorAlign.END,
             y_align: Clutter.ActorAlign.START,
         });
-        topRow.add_child(this._switcherBox);
         topRow.add_child(this._lyricsButton);
         topRow.add_child(this._prefsButton);
         actions.add_child(topRow);
@@ -447,7 +395,7 @@ export const MediaCard = GObject.registerClass({
             ...boxOrientation(Clutter.Orientation.VERTICAL),
         });
         this._headerColumn.add_child(header);
-        this.add_child(this._headerColumn);
+        this._content.add_child(this._headerColumn);
     }
 
     _buildLyrics(source) {
@@ -523,7 +471,7 @@ export const MediaCard = GObject.registerClass({
 
         this._seekBox.add_child(this._slider);
         this._seekBox.add_child(times);
-        this.add_child(this._seekBox);
+        this._content.add_child(this._seekBox);
     }
 
     _buildControls() {
@@ -576,7 +524,187 @@ export const MediaCard = GObject.registerClass({
         row.add_child(this._shuffleButton);
         row.add_child(controls);
         row.add_child(this._loopButton);
-        this.add_child(row);
+        this._content.add_child(row);
+    }
+
+    /* The bottom line of the card, under a hairline: which player this is —
+     * and, with more than one running, the way to switch — beside its volume. */
+    _buildFooter() {
+        this._footer = new St.BoxLayout({
+            style_class: 'mc-card-footer',
+            ...boxOrientation(Clutter.Orientation.HORIZONTAL),
+        });
+        this._buildPicker();
+        this._buildVolume();
+        this._footer.add_child(this._pickerButton);
+        this._footer.add_child(this._volumeBox);
+        this._content.add_child(this._footer);
+    }
+
+    _buildPicker() {
+        this._pickerIcon = new St.Icon({
+            style_class: 'mc-player-picker-icon',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this._pickerLabel = new St.Label({
+            style_class: 'mc-player-picker-label',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this._pickerLabel.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+
+        /* Points the way the list opens — up, since the card ends just below —
+         * and turns over while it is open. */
+        this._pickerArrow = new St.Icon({
+            style_class: 'mc-player-picker-arrow',
+            icon_name: 'pan-up-symbolic',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this._pickerArrow.set_pivot_point(0.5, 0.5);
+
+        const box = new St.BoxLayout({
+            style_class: 'mc-player-picker-box',
+            ...boxOrientation(Clutter.Orientation.HORIZONTAL),
+        });
+        box.add_child(this._pickerIcon);
+        box.add_child(this._pickerLabel);
+        box.add_child(this._pickerArrow);
+
+        this._pickerButton = new St.Button({
+            style_class: 'mc-player-picker',
+            can_focus: true,
+            y_align: Clutter.ActorAlign.CENTER,
+            accessible_name: _('Switch player'),
+            child: box,
+        });
+        this._pickerButton.connect('clicked', () => {
+            if (this._playerListOpen) {
+                this._closePlayerList();
+                return;
+            }
+            /* Opened from the keyboard, the keyboard goes into the list; opened
+             * with the pointer, no row should light up as if focused. */
+            const type = Clutter.get_current_event()?.type();
+            this._openPlayerList(type === Clutter.EventType.KEY_PRESS ||
+                type === Clutter.EventType.KEY_RELEASE);
+        });
+    }
+
+    _updateFooter() {
+        this._footer.visible = this._pickerButton.visible || this._volumeBox.visible;
+    }
+
+    /* Over the card rather than in it: the list floats above the controls, so
+     * opening it never makes the card taller, nor pushes it off the screen. */
+    _buildPlayerList() {
+        /* Dims the card behind the list and takes the click that dismisses it,
+         * so that click does not also land on a control underneath. */
+        this._scrim = new St.Button({
+            style_class: 'mc-card-scrim',
+            x_expand: true,
+            y_expand: true,
+            opacity: 0,
+            visible: false,
+        });
+        this._scrim.connect('clicked', () => this._closePlayerList());
+
+        this._playerList = new PlayerList(this._artCache);
+        this._playerList.opacity = 0;
+        this._playerList.connect('player-selected', (_list, busName) => {
+            this._closePlayerList();
+            this.emit('player-selected', busName);
+        });
+        this._playerList.connect('close-requested', () => this._closePlayerList());
+
+        /* Not placed through margins, which St resets from the stylesheet on
+         * every style change. The layer is not reactive, so a click beside the
+         * list goes through to the scrim. */
+        this._listLayer = new ListLayer(this._playerList, () => this._pickerTop());
+
+        this.add_child(this._scrim);
+        this.add_child(this._listLayer);
+    }
+
+    /* The top of the player button, in the card's coordinates. Read from the
+     * allocations, which are current by the time the list's layer asks: the
+     * card lays out its content first. */
+    _pickerTop() {
+        let y = 0;
+        for (let actor = this._pickerButton; actor && actor !== this; actor = actor.get_parent())
+            y += actor.get_allocation_box().y1;
+        return y;
+    }
+
+    /** @param {boolean} byKeyboard whether to put the focus on the first row */
+    _openPlayerList(byKeyboard) {
+        if (this._playerListOpen)
+            return;
+        this._playerListOpen = true;
+        this._focusBeforeList = global.stage.key_focus;
+
+        const list = this._playerList;
+        list.open();
+        list.remove_all_transitions();
+        this._listLayer.show();
+
+        this._scrim.remove_all_transitions();
+        this._scrim.show();
+        this._scrim.ease({
+            opacity: 255,
+            duration: LIST_MS,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        });
+        list.translation_y = LIST_SLIDE;
+        list.ease({
+            opacity: 255,
+            translation_y: 0,
+            duration: LIST_MS,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        });
+        this._pickerArrow.ease({
+            rotation_angle_z: 180,
+            duration: LIST_MS,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        });
+        this._pickerButton.checked = true;
+
+        if (byKeyboard)
+            list.focusFirst();
+        else
+            list.grab_key_focus();
+    }
+
+    /** @param {boolean} animate false when the card itself is going away */
+    _closePlayerList(animate = true) {
+        if (!this._playerListOpen)
+            return;
+        this._playerListOpen = false;
+
+        /* The keyboard goes back where it was, rather than staying in a list
+         * that is about to be hidden. */
+        const focus = global.stage.key_focus;
+        if (focus && this._playerList.contains(focus))
+            (this._focusBeforeList ?? this._pickerButton).grab_key_focus();
+        this._focusBeforeList = null;
+
+        this._playerList.close();
+        this._pickerButton.checked = false;
+
+        const duration = animate ? LIST_MS : 0;
+        const mode = Clutter.AnimationMode.EASE_OUT_QUAD;
+        this._pickerArrow.ease({rotation_angle_z: 0, duration, mode});
+        this._scrim.ease({
+            opacity: 0,
+            duration,
+            mode,
+            onComplete: () => this._scrim.hide(),
+        });
+        this._playerList.ease({
+            opacity: 0,
+            translation_y: LIST_SLIDE / 2,
+            duration,
+            mode,
+            onComplete: () => this._listLayer.hide(),
+        });
     }
 
     /* The player's own volume, not the system's. MPRIS announces Volume in
@@ -585,6 +713,7 @@ export const MediaCard = GObject.registerClass({
         this._volumeBox = new St.BoxLayout({
             style_class: 'mc-volume-box',
             ...boxOrientation(Clutter.Orientation.HORIZONTAL),
+            x_expand: true,
         });
 
         this._volumeIcon = new St.Icon({
@@ -610,7 +739,6 @@ export const MediaCard = GObject.registerClass({
 
         this._volumeBox.add_child(this._volumeIcon);
         this._volumeBox.add_child(this._volumeSlider);
-        this.add_child(this._volumeBox);
     }
 
     /* Leave the slider where the user put it until the writes have echoed
@@ -745,6 +873,9 @@ export const MediaCard = GObject.registerClass({
     /** The card only polls Position while it is actually on screen. */
     setActive(active) {
         this._active = active;
+        /* The card opens as it was left, apart from the list. */
+        if (!active)
+            this._closePlayerList(false);
         this._equalizer.setActive(active);
         this._lyrics.setActive(active);
         this._updateTimer();
@@ -878,6 +1009,7 @@ export const MediaCard = GObject.registerClass({
             this._shuffleButton.visible = false;
             this._loopButton.visible = false;
             this._volumeBox.visible = false;
+            this._updateFooter();
             this._equalizer.visible = false;
             this._equalizer.setPlaying(false);
             this._lyricsButton.visible = false;
@@ -888,7 +1020,7 @@ export const MediaCard = GObject.registerClass({
             return;
         }
 
-        const title = player.title || _('Unknown title');
+        const title = player.displayTitle || _('Unknown title');
         const artist = player.artist;
         const album = player.album;
 
@@ -908,7 +1040,7 @@ export const MediaCard = GObject.registerClass({
         this._setSensitive(this._nextButton, player.canGoNext);
         this._setSensitive(this._playButton, player.canPlay);
 
-        this._setRaisable(player.canRaise, player.identity);
+        this._setRaisable(player.canRaise, player.displayName);
 
         this._length = player.length;
         const showSeek = this._settings.get_boolean('card-show-seek-bar') &&
@@ -936,6 +1068,7 @@ export const MediaCard = GObject.registerClass({
         this._volumeBox.visible =
             this._settings.get_boolean('card-show-volume') && player.canSetVolume;
         this._syncVolume();
+        this._updateFooter();
 
         /* Lyrics are for songs, not browser tabs or films. */
         const showLyrics = this._settings.get_boolean('card-show-lyrics-button') &&
@@ -963,16 +1096,16 @@ export const MediaCard = GObject.registerClass({
      * and nothing to tab to.
      *
      * @param {boolean} raisable whether the player implements Raise
-     * @param {string} identity names the target for screen readers
+     * @param {string} name names the target for screen readers
      */
-    _setRaisable(raisable, identity = '') {
+    _setRaisable(raisable, name = '') {
         if (this._artButton.reactive !== raisable) {
             this._artButton.can_focus = raisable;
             this._artButton.track_hover = raisable;
             setReactive(this._artButton, raisable);
             syncHover(this._artButton);
         }
-        this._artButton.accessible_name = raisable ? identity : '';
+        this._artButton.accessible_name = raisable ? name : '';
     }
 
     _onDestroy() {
@@ -997,8 +1130,8 @@ export const MediaCard = GObject.registerClass({
             this._settings.disconnect(id);
         this._settingsSignals = [];
         this._player = null;
-        /* The tab actors go with the card; these only hold player references. */
-        this._tabs.clear();
-        this._roster = [];
+        this._players = [];
+        this._activePlayer = null;
+        this._focusBeforeList = null;
     }
 });

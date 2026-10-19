@@ -132,7 +132,7 @@
 
     <key name="card-art-size"
          enum="org.gnome.shell.extensions.media-controller.card-art-size">
-      <default>'medium'</default>
+      <default>'large'</default>
       <summary>How large the album art is drawn in the card</summary>
       <description>Only has an effect while card-show-art is set. The fallback player icon scales to match.</description>
     </key>
@@ -146,7 +146,7 @@
     <key name="card-show-player-switcher" type="b">
       <default>true</default>
       <summary>Show the player switcher in the card</summary>
-      <description>A strip of player icons beside the card's settings button, one per running media player. Only shown while more than one player is running.</description>
+      <description>A button beside the volume bar naming the player on screen. While more than one player is running, it opens a list of them all, with what each is playing, to switch between.</description>
     </key>
 
     <key name="card-show-seek-bar" type="b">
@@ -203,7 +203,7 @@
     </key>
 
     <key name="card-width" type="i">
-      <default>400</default>
+      <default>460</default>
       <range min="400" max="560"/>
       <summary>Card width in pixels</summary>
     </key>

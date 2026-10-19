@@ -28,29 +28,48 @@ Rhythmbox, mpv, and so on.
 </p>
 <p align="center"><em>The panel indicator and the now-playing card.</em></p>
 
+## What's new in 3.0
+
+- **Volume bar** along the bottom of the card, in your accent color, for the
+  player's own volume.
+- **Player list**: the player's name sits beside the volume bar, and opens a
+  list of every running player — with its artwork and what it is playing — to
+  switch between. It replaces the strip of icons beside the settings button.
+- **Proper app names**: players go by the names GNOME gives their apps, so
+  Firefox is "Firefox" rather than "Mozilla org.mozilla.firefox".
+- **Bigger album art** at every size, with Large the new default, and a wider
+  card by default: 460 pixels.
+
 ## Features
 
 - **Panel indicator** showing the player icon, track title and artist, in a
   fixed-width slot so it does not resize as tracks change.
-- **Scrolling text**, off by default: text too wide for that slot loops past it
-  carousel-style instead of being ellipsized.
+- **Scrolling text**, on by default: text too wide for that slot scrolls past it
+  carousel-style instead of being ellipsized — once per track, or continuously.
 - **Playback controls** in the panel: previous, skip backward, play/pause, skip
   forward, next, plus optional shuffle and loop buttons. Each button can be
   shown or hidden independently.
 - **Click the album art** to raise the player's own window. Players that do not
   support being raised leave the artwork as a plain picture.
-- **Now-playing card** when you click the indicator: album art, a wrapping title,
-  artist and album, a draggable seek bar with elapsed and remaining time, and
-  large transport controls including skip buttons — with shuffle on the card's
-  left edge and loop on its right, aligned with the controls — and a volume bar
-  in your accent color beneath them.
-- **Player switching** when more than one player is running: a strip of app icons
-  appears in the card's top corner, left of the settings button, and clicking one
-  puts that player in the panel. The choice sticks through the noise of a track
-  changing, and is released as soon as you press play somewhere else — that player
-  takes over. Three icons are shown at most: the player currently on screen, plus
-  the most recently opened. With a single player the strip stays hidden and the
-  card looks exactly as it always did.
+- **Now-playing card** when you click the indicator: album art in three sizes, a
+  wrapping title, artist and album, a draggable seek bar with elapsed and
+  remaining time, and large transport controls including skip buttons — with
+  shuffle on the card's left edge and loop on its right, aligned with the
+  controls. Along the bottom, under a hairline, the player's name sits beside a
+  volume bar in your accent color.
+- **Volume bar** that sets the player's own volume, by dragging, scrolling,
+  clicking or with the arrow keys. It follows changes made in the player itself.
+- **Player switching** when more than one player is running: clicking the
+  player's name opens a list of every running player with its artwork and what
+  it is playing. Picking one puts that player in the card and the panel. The
+  choice sticks through the noise of a track changing, and is released as soon
+  as you press play somewhere else — that player takes over. The list floats
+  over the card, never taller than the card has room for, and scrolls beyond
+  that. A browser counts as one player, showing the tab that played last:
+  browsers publish only that tab over MPRIS.
+- **Proper app names**: players go by the names GNOME gives their apps — the
+  ones in the app grid and the dash — so Firefox is "Firefox" and Chrome is
+  "Google Chrome", whatever the player calls itself.
 - **One player at a time**: starting playback in one player pauses whichever
   other player was playing, so hitting play in VLC no longer leaves Spotify
   running underneath it. Players already playing when the extension starts are
@@ -116,20 +135,22 @@ in on Wayland, because the shell caches ES modules for the life of the process.
 
 | Setting                                           | Default         | Description                                             |
 | ------------------------------------------------- | --------------- | ------------------------------------------------------- |
-| `panel-position`                                  | `right`         | `far-left`, `left`, `center`, `right`, `far-right`      |
+| `panel-position`                                  | `left`          | `far-left`, `left`, `center`, `right`, `far-right`      |
 | `show-previous` / `show-play-pause` / `show-next` | on              | Panel transport buttons                                 |
 | `show-seek-backward` / `show-seek-forward`        | off             | Panel skip buttons                                      |
 | `show-shuffle` / `show-loop`                      | off             | Panel shuffle and loop buttons                          |
 | `show-player-icon`                                | on              | Application icon in the panel                           |
-| `show-title` / `show-artist`                      | on / off        | Panel text                                              |
+| `show-title` / `show-artist`                      | on              | Panel text                                              |
 | `panel-text-width`                                | 300             | Width of the panel text, in pixels                      |
-| `scroll-text`                                     | off             | Scroll text wider than that, rather than ellipsizing it |
+| `scroll-text`                                     | on              | Scroll text wider than that, rather than ellipsizing it |
+| `scroll-loop`                                     | off             | Keep scrolling, rather than once per track              |
 | `scroll-direction`                                | `left-to-right` | `left-to-right` or `right-to-left`                      |
 | `scroll-speed`                                    | 30              | Scrolling speed, in pixels per second                   |
 | `controls-on-left`                                | off             | Put the buttons before the text                         |
 | `hide-when-inactive`                              | on              | Hide the indicator when no player is running            |
 | `card-show-art`                                   | on              | Album art in the card                                   |
-| `card-show-player-switcher`                       | on              | Icons for switching players, when more than one is running |
+| `card-art-size`                                   | `large`         | `small`, `medium` or `large`: 80, 104 or 136 pixels     |
+| `card-show-player-switcher`                       | on              | Player button beside the volume bar, listing every player to switch to |
 | `pause-others-on-play`                            | on              | Starting one player pauses whichever other was playing  |
 | `card-show-seek-bar`                              | on              | Seek bar in the card                                    |
 | `card-show-seek-buttons`                          | on              | Skip buttons in the card                                |
@@ -139,7 +160,7 @@ in on Wayland, because the shell caches ES modules for the life of the process.
 | `lyrics-online-lookup`                            | off             | Ask LRCLIB when the player and `.lrc` files have none   |
 | `lyrics-height`                                   | 320             | Height of the lyrics in pixels (160–560), made shorter when the screen has no room |
 | `seek-step-seconds`                               | 10              | How far the skip buttons jump, in seconds               |
-| `card-width`                                      | 400             | Card width in pixels (400–560)                          |
+| `card-width`                                      | 460             | Card width in pixels (400–560)                          |
 
 ## Layout
 
@@ -148,9 +169,11 @@ in on Wayland, because the shell caches ES modules for the life of the process.
 | [src/extension.js](src/extension.js)           | Panel indicator, menu, panel placement      |
 | [src/mediaCard.js](src/mediaCard.js)           | The now-playing card                        |
 | [src/lyricsPanel.js](src/lyricsPanel.js)       | The card's lyrics view                      |
+| [src/playerList.js](src/playerList.js)         | The card's list of players to switch to     |
 | [src/lyrics.js](src/lyrics.js)                 | Finds lyrics and parses LRC                 |
 | [src/scrollingLabel.js](src/scrollingLabel.js) | The fixed-width panel label and its marquee |
 | [src/mpris.js](src/mpris.js)                   | MPRIS2 D-Bus client and player tracking     |
+| [src/playerIcons.js](src/playerIcons.js)       | Matches a player to its app: icon, name, kind |
 | [src/artCache.js](src/artCache.js)             | Resolves and caches album art               |
 | [src/prefs.js](src/prefs.js)                   | Preferences window                          |
 | [src/compat.js](src/compat.js)                 | Differences between GNOME Shell versions    |

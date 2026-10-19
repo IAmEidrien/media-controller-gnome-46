@@ -202,7 +202,7 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
         });
         multiple.add(this._switchRow(settings, 'card-show-player-switcher',
             _('Player switcher'),
-            _('Player icons beside the settings button, for choosing which player the card and panel follow.')));
+            _('A button beside the volume bar names the player on screen, and lists every running player, with what each is playing, for choosing which one the card and panel follow.')));
         multiple.add(this._switchRow(settings, 'pause-others-on-play',
             _('Play one player at a time'),
             _('When a player starts playing, pause whichever other player was playing. Players already running when the extension starts are left alone.')));

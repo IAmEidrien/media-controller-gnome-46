@@ -310,8 +310,8 @@ class MediaIndicator extends PanelMenu.Button {
     /** The full text; the label itself truncates or scrolls it. */
     _panelText(player) {
         const parts = [];
-        if (this._prefs.showTitle && player.title)
-            parts.push(player.title);
+        if (this._prefs.showTitle && player.displayTitle)
+            parts.push(player.displayTitle);
         if (this._prefs.showArtist && player.artist)
             parts.push(player.artist);
         return parts.join(' · ');

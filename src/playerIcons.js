@@ -157,15 +157,33 @@ export const PlayerKind = Object.freeze({
 });
 
 /**
+ * What the desktop knows about the player's app, from the same desktop file the
+ * icon came from.
+ *
+ * The name is the one the app goes by in the app grid, the dash and the window
+ * switcher, and it beats the player's own Identity, which some builds get
+ * badly wrong: Firefox puts its vendor in front of its internal app name, and
+ * Fedora's build sets that to its desktop id — "Mozilla org.mozilla.firefox".
+ *
+ * @param {object} player the hints candidateNames() takes
+ * @returns {{kind: string, name: string|null}} a PlayerKind, and the app's
+ *   name, or null when no desktop file was found
+ */
+export function resolvePlayerApp(player) {
+    const app = findApp(player);
+    return {kind: kindOf(app), name: app?.get_name() || null};
+}
+
+/**
  * Classify a player by its desktop file's categories. A browser can be playing
  * anything, and an app declaring Video plays films too, whatever else it
  * declares.
  *
- * @param {object} player the hints candidateNames() takes
+ * @param {object|null} app the player's GioUnix.DesktopAppInfo
  * @returns {string} a PlayerKind
  */
-export function resolvePlayerKind(player) {
-    const categories = new Set(findApp(player)?.get_categories()?.split(';'));
+function kindOf(app) {
+    const categories = new Set(app?.get_categories()?.split(';'));
     if (categories.has('WebBrowser'))
         return PlayerKind.BROWSER;
     if (!categories.has('Video') && !categories.has('TV') &&
