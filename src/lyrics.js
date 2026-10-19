@@ -123,6 +123,11 @@ function preferred(...candidates) {
         candidates.find(lyrics => lyrics) ?? null;
 }
 
+/* Timed lyrics, or a track known to have none: no other record does better. */
+function settled(lyrics) {
+    return Boolean(lyrics?.synced || lyrics?.instrumental);
+}
+
 function cleanTitle(title) {
     const clean = TITLE_NOISE.reduce((text, noise) => text.replace(noise, ''), title).trim();
     return clean || title.trim();
@@ -259,7 +264,9 @@ export class LyricsSource {
     /*
      * The exact match first, which LRCLIB also chases through its upstream
      * sources; then a search of its database; then, for a video-style
-     * "Artist - Title", a search by what that names. A failed request does not
+     * "Artist - Title", a search by what that names. Each step is taken until
+     * timed lyrics turn up: the exact match may hold only plain words while
+     * other records of the same recording are timed. A failed request does not
      * stop the rest, and fails the lookup only if nothing was found.
      */
     async _search(track) {
@@ -290,12 +297,14 @@ export class LyricsSource {
                 artist_name: artist,
                 album_name: track.album,
                 duration,
-            }), duration) ?? await search(title, artist);
+            }), duration);
+            if (!settled(lyrics))
+                lyrics = preferred(lyrics, await search(title, artist));
         }
 
         const [, named, song] = title.match(VIDEO_TITLE) ?? [];
-        if (!lyrics && named && song)
-            lyrics = await search(song.trim(), named.trim());
+        if (!settled(lyrics) && named && song)
+            lyrics = preferred(lyrics, await search(song.trim(), named.trim()));
 
         if (!lyrics && failure)
             throw failure;

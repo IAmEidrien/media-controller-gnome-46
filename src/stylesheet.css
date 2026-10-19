@@ -200,9 +200,12 @@
 
 /* ---------- Lyrics ---------- */
 
-/* Fixed, so the controls below do not jump while lyrics load. */
+/* Fixed, so the controls below do not jump while lyrics load. The top padding
+ * stands in for the card's spacing, which would otherwise appear all at once
+ * while the panel grows. */
 .mc-lyrics {
   height: 240px;
+  padding-top: 12px;
 }
 
 .mc-lyrics-scroll {

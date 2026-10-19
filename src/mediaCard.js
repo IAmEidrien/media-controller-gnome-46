@@ -413,7 +413,15 @@ export const MediaCard = GObject.registerClass({
         actions.add_child(status);
 
         header.add_child(actions);
-        this.add_child(header);
+
+        /* The lyrics open under the header in a column with no spacing: the
+         * gap above them is their own padding, so it grows with them instead
+         * of appearing all at once. */
+        this._headerColumn = new St.BoxLayout({
+            ...boxOrientation(Clutter.Orientation.VERTICAL),
+        });
+        this._headerColumn.add_child(header);
+        this.add_child(this._headerColumn);
     }
 
     _buildLyrics(source) {
@@ -423,7 +431,7 @@ export const MediaCard = GObject.registerClass({
             this._refreshPositionSoon();
         });
         this._lyrics.connect('timing-changed', () => this._onLyricsTimingChanged());
-        this.add_child(this._lyrics);
+        this._headerColumn.add_child(this._lyrics);
     }
 
     /* Timed lyrics need the position polled, and want it now. */
