@@ -224,16 +224,16 @@
   font-size: 1.15em;
   font-weight: 700;
   color: #ffffff;
+  text-align: center;
 }
 
 .mc-lyrics-line:hover {
   background-color: rgba(127, 127, 127, 0.2);
 }
 
-.mc-lyrics-plain {
-  padding: 0 8px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.85);
+/* The gap between verses of plain lyrics. */
+.mc-lyrics-break {
+  height: 10px;
 }
 
 .mc-lyrics-status {

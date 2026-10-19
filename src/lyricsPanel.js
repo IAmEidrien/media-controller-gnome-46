@@ -2,7 +2,7 @@
 /* lyricsPanel.js
  *
  * The card's lyrics. Timed lyrics light up the line being sung and keep it in
- * view; plain lyrics just scroll.
+ * view; plain lyrics look the same but stay put.
  */
 
 import Clutter from 'gi://Clutter';
@@ -385,13 +385,22 @@ export const LyricsPanel = GObject.registerClass({
         this._searching = false;
         this._updatePulse();
 
+        /* Set out like timed lines, but all lit and never followed, since no
+         * line is known to be the one being sung. */
         if (!lyrics.synced) {
-            const label = new St.Label({
-                style_class: 'mc-lyrics-plain',
-                text: lyrics.lines.map(line => line.text).join('\n'),
-            });
-            wrap(label);
-            this._linesBox.add_child(label);
+            for (const {text} of lyrics.lines) {
+                if (!text) {
+                    this._linesBox.add_child(new St.Widget({style_class: 'mc-lyrics-break'}));
+                    continue;
+                }
+                const label = new St.Label({text});
+                wrap(label);
+                this._linesBox.add_child(new St.Bin({
+                    style_class: 'mc-lyrics-line',
+                    child: label,
+                    x_expand: true,
+                }));
+            }
             return;
         }
 
