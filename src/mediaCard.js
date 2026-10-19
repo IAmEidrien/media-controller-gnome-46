@@ -46,6 +46,26 @@ const ART_SIZES = {
 };
 const DEFAULT_ART_SIZE = 'medium';
 
+/* How long the volume slider stops following the player after the user moves
+ * it. Every write comes back as a PropertiesChanged a moment later, and those
+ * echoes, replayed mid-drag, would pull the thumb back to where it just was. */
+const VOLUME_HOLD_MS = 400;
+
+/* The shell's own volume slider's thresholds: muted only at zero, then thirds. */
+const VOLUME_ICONS = [
+    'audio-volume-muted-symbolic',
+    'audio-volume-low-symbolic',
+    'audio-volume-medium-symbolic',
+    'audio-volume-high-symbolic',
+];
+
+/** @param {number} volume 0 to 1, or past it on players that amplify */
+function volumeIconName(volume) {
+    if (volume <= 0)
+        return VOLUME_ICONS[0];
+    return VOLUME_ICONS[Math.min(3, Math.ceil(volume * 3))];
+}
+
 /**
  * Spreading the string iterates code points, so the cut never lands between the
  * halves of a surrogate pair and split an emoji into a broken glyph.
@@ -128,6 +148,7 @@ export const MediaCard = GObject.registerClass({
         this._playerSignals = [];
         this._timeoutId = 0;
         this._seekRefreshId = 0;
+        this._volumeHoldId = 0;
         this._dragging = false;
         this._dragPlayer = null;
         this._dragLength = 0;
@@ -148,6 +169,7 @@ export const MediaCard = GObject.registerClass({
         this._buildLyrics(lyricsSource);
         this._buildSeekBar();
         this._buildControls();
+        this._buildVolume();
 
         this._settingsSignals = [
             this._settings.connect('changed::card-show-art', () => this.sync()),
@@ -155,6 +177,7 @@ export const MediaCard = GObject.registerClass({
             this._settings.connect('changed::card-show-seek-buttons', () => this.sync()),
             this._settings.connect('changed::card-show-shuffle', () => this.sync()),
             this._settings.connect('changed::card-show-loop', () => this.sync()),
+            this._settings.connect('changed::card-show-volume', () => this.sync()),
             this._settings.connect('changed::card-show-lyrics-button', () => this.sync()),
             this._settings.connect('changed::card-show-player-switcher',
                 () => this._updateSwitcher()),
@@ -556,6 +579,64 @@ export const MediaCard = GObject.registerClass({
         this.add_child(row);
     }
 
+    /* The player's own volume, not the system's. MPRIS announces Volume in
+     * PropertiesChanged, so unlike the seek bar this needs no polling. */
+    _buildVolume() {
+        this._volumeBox = new St.BoxLayout({
+            style_class: 'mc-volume-box',
+            ...boxOrientation(Clutter.Orientation.HORIZONTAL),
+        });
+
+        this._volumeIcon = new St.Icon({
+            style_class: 'mc-volume-icon',
+            icon_name: volumeIconName(1),
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+
+        this._volumeSlider = new Slider(0);
+        this._volumeSlider.add_style_class_name('mc-volume');
+        this._volumeSlider.x_expand = true;
+        this._volumeSlider.accessible_name = _('Volume');
+
+        /* Drags, scrolls, clicks and arrow keys all land here. Blocked while
+         * _syncVolume() moves the slider, so the player's own value is not
+         * written straight back to it. */
+        this._volumeChangedId = this._volumeSlider.connect('notify::value', () => {
+            const volume = this._volumeSlider.value;
+            this._player?.setVolume(volume);
+            this._volumeIcon.icon_name = volumeIconName(volume);
+            this._holdVolume();
+        });
+
+        this._volumeBox.add_child(this._volumeIcon);
+        this._volumeBox.add_child(this._volumeSlider);
+        this.add_child(this._volumeBox);
+    }
+
+    /* Leave the slider where the user put it until the writes have echoed
+     * back, then take the player's word for it — which also puts the slider
+     * right if the player clamped or refused the change. */
+    _holdVolume() {
+        if (this._volumeHoldId)
+            GLib.Source.remove(this._volumeHoldId);
+        this._volumeHoldId = GLib.timeout_add(GLib.PRIORITY_DEFAULT,
+            VOLUME_HOLD_MS, () => {
+                this._volumeHoldId = 0;
+                this._syncVolume();
+                return GLib.SOURCE_REMOVE;
+            });
+    }
+
+    _syncVolume() {
+        const volume = this._player?.volume ?? null;
+        if (this._volumeHoldId || volume === null)
+            return;
+        this._volumeSlider.block_signal_handler(this._volumeChangedId);
+        this._volumeSlider.value = volume;
+        this._volumeSlider.unblock_signal_handler(this._volumeChangedId);
+        this._volumeIcon.icon_name = volumeIconName(volume);
+    }
+
     _toggleShuffle() {
         if (!this._player)
             return;
@@ -796,6 +877,7 @@ export const MediaCard = GObject.registerClass({
             this._forwardButton.visible = false;
             this._shuffleButton.visible = false;
             this._loopButton.visible = false;
+            this._volumeBox.visible = false;
             this._equalizer.visible = false;
             this._equalizer.setPlaying(false);
             this._lyricsButton.visible = false;
@@ -851,6 +933,10 @@ export const MediaCard = GObject.registerClass({
         setToggleStyle(this._loopButton,
             player.canLoop && player.loopStatus !== 'None');
 
+        this._volumeBox.visible =
+            this._settings.get_boolean('card-show-volume') && player.canSetVolume;
+        this._syncVolume();
+
         /* Lyrics are for songs, not browser tabs or films. */
         const showLyrics = this._settings.get_boolean('card-show-lyrics-button') &&
             player.playsMusic;
@@ -901,6 +987,10 @@ export const MediaCard = GObject.registerClass({
         if (this._seekRefreshId) {
             GLib.Source.remove(this._seekRefreshId);
             this._seekRefreshId = 0;
+        }
+        if (this._volumeHoldId) {
+            GLib.Source.remove(this._volumeHoldId);
+            this._volumeHoldId = 0;
         }
         this._disconnectPlayer();
         for (const id of this._settingsSignals)

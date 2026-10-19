@@ -42,7 +42,8 @@ Rhythmbox, mpv, and so on.
 - **Now-playing card** when you click the indicator: album art, a wrapping title,
   artist and album, a draggable seek bar with elapsed and remaining time, and
   large transport controls including skip buttons — with shuffle on the card's
-  left edge and loop on its right, aligned with the controls.
+  left edge and loop on its right, aligned with the controls — and a volume bar
+  in your accent color beneath them.
 - **Player switching** when more than one player is running: a strip of app icons
   appears in the card's top corner, left of the settings button, and clicking one
   puts that player in the panel. The choice sticks through the noise of a track
@@ -66,7 +67,9 @@ Rhythmbox, mpv, and so on.
 - Follows the shell theme, including light/dark and your accent color.
 
 Skip buttons only appear for players that support seeking; shuffle and loop
-only for players that expose them over MPRIS.
+only for players that expose them over MPRIS. The volume bar sets the player's
+own volume rather than the system's, so it appears only for players that let it
+be set over MPRIS — not for browsers.
 
 ## Requirements
 
@@ -131,6 +134,7 @@ in on Wayland, because the shell caches ES modules for the life of the process.
 | `card-show-seek-bar`                              | on              | Seek bar in the card                                    |
 | `card-show-seek-buttons`                          | on              | Skip buttons in the card                                |
 | `card-show-shuffle` / `card-show-loop`            | on              | Shuffle and loop buttons on the card's edges            |
+| `card-show-volume`                                | on              | Volume bar under the card's controls, for the player's own volume |
 | `card-show-lyrics-button`                         | on              | Lyrics button in the card, for music players            |
 | `lyrics-online-lookup`                            | off             | Ask LRCLIB when the player and `.lrc` files have none   |
 | `lyrics-height`                                   | 320             | Height of the lyrics in pixels (160–560), made shorter when the screen has no room |

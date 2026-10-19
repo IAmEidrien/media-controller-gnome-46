@@ -228,6 +228,9 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
         playback.add(this._switchRow(settings, 'card-show-loop',
             _('Loop button'),
             _('Shown at the right edge of the controls. Cycles between off, the whole queue, and one track.')));
+        playback.add(this._switchRow(settings, 'card-show-volume',
+            _('Volume bar'),
+            _('Shown under the controls. Sets the volume of the player itself, not of the whole system. Requires a player that supports it; browsers do not.')));
         page.add(playback);
 
         const lyrics = new Adw.PreferencesGroup({

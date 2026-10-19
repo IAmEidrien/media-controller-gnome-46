@@ -349,3 +349,29 @@
 .mc-mode-on StIcon {
   color: -st-accent-color;
 }
+
+/* ---------- Volume ---------- */
+
+/* Under the controls, spanning the card like the seek bar does. */
+.mc-volume-box {
+  spacing: 10px;
+  padding: 0 2px;
+}
+
+.mc-volume-icon {
+  icon-size: 16px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.mc-volume {
+  height: 18px;
+}
+
+/* The fill and the thumb both wear the desktop accent color. Hover is named
+ * too, or the theme's own .slider:hover would turn the thumb white. */
+.mc-card .mc-volume,
+.mc-card .mc-volume:hover {
+  color: -st-accent-color;
+  -barlevel-background-color: rgba(255, 255, 255, 0.1);
+  -barlevel-active-background-color: -st-accent-color;
+}

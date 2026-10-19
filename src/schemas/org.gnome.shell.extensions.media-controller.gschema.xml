@@ -171,6 +171,12 @@
       <description>Only shown for players that support looping. Cycles between off, the whole queue, and one track.</description>
     </key>
 
+    <key name="card-show-volume" type="b">
+      <default>true</default>
+      <summary>Show the volume bar in the card</summary>
+      <description>A slider under the playback controls that sets the player's own volume. Only shown for players that let their volume be set over MPRIS, which browsers do not.</description>
+    </key>
+
     <key name="card-show-lyrics-button" type="b">
       <default>true</default>
       <summary>Show the lyrics button in the card</summary>

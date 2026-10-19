@@ -74,6 +74,8 @@ const PlayerIface = `
     <property name="Metadata" type="a{sv}" access="read"/>
     <property name="Position" type="x" access="read"/>
     <property name="Rate" type="d" access="read"/>
+    <property name="Volume" type="d" access="readwrite"/>
+    <property name="CanControl" type="b" access="read"/>
     <property name="CanPlay" type="b" access="read"/>
     <property name="CanPause" type="b" access="read"/>
     <property name="CanGoNext" type="b" access="read"/>
@@ -303,6 +305,25 @@ export const MprisPlayer = GObject.registerClass({
         return this.shuffle !== null;
     }
 
+    /* Volume is optional as well, and `null` again means "not implemented".
+     * Players such as mpv and VLC allow it past 1.0 for amplification. */
+    get volume() {
+        const volume = this._playerProxy?.Volume;
+        return typeof volume === 'number' ? volume : null;
+    }
+
+    /**
+     * Browsers are left out: Chromium and its derivatives publish a Volume
+     * that always reads 1.0 and silently ignore writes to it, so a slider for
+     * them would move nothing. CanControl false means the player takes no
+     * commands at all.
+     */
+    get canSetVolume() {
+        return this.volume !== null &&
+            (this._playerProxy?.CanControl ?? true) &&
+            this.kind !== PlayerKind.BROWSER;
+    }
+
     get canRaise() {
         return this._appProxy?.CanRaise ?? false;
     }
@@ -412,6 +433,19 @@ export const MprisPlayer = GObject.registerClass({
             this._playerProxy.Shuffle = shuffle;
         } catch (e) {
             logError('set Shuffle failed', e);
+        }
+    }
+
+    /**
+     * @param {number} volume from 0 for silence to 1 for full volume
+     */
+    setVolume(volume) {
+        if (!this._playerProxy || !this.canSetVolume)
+            return;
+        try {
+            this._playerProxy.Volume = volume;
+        } catch (e) {
+            logError('set Volume failed', e);
         }
     }
 
