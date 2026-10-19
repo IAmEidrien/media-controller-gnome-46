@@ -19,7 +19,8 @@ const RELEASE = '2.5';
 
 function releaseNotes() {
     return [
-        _('Lyrics in the card, following along line by line. Contributed by FrigoreD.'),
+        _('Lyrics in the card, following along line by line.'),
+        _('The height of the lyrics can be set in the preferences, and the card always fits on screen.'),
         _('The card’s controls are readable in light mode.'),
         _('Fixes for live streams, switching players and the scrolling title.'),
     ].map(line => `• ${line}`).join('\n');

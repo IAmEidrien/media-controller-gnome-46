@@ -122,6 +122,8 @@ export const MediaCard = GObject.registerClass({
 
         this._artCache = artCache;
         this._settings = settings;
+        /* Stage pixels; known once the card is first opened. */
+        this._maxHeight = Infinity;
         this._player = null;
         this._playerSignals = [];
         this._timeoutId = 0;
@@ -157,6 +159,7 @@ export const MediaCard = GObject.registerClass({
             this._settings.connect('changed::card-show-player-switcher',
                 () => this._updateSwitcher()),
             this._settings.connect('changed::card-width', () => this._applyWidth()),
+            this._settings.connect('changed::lyrics-height', () => this._applyLyricsHeight()),
             this._settings.connect('changed::card-art-size', () => this._applyArtSize()),
         ];
         this._applyWidth();
@@ -594,6 +597,21 @@ export const MediaCard = GObject.registerClass({
         this.style = `width: ${this._settings.get_int('card-width')}px;`;
     }
 
+    /** @param {number} height the most the card may take up, in stage pixels */
+    setMaxHeight(height) {
+        this._maxHeight = height;
+        this._applyLyricsHeight();
+    }
+
+    /* The lyrics are as tall as the setting asks, short of running the card
+     * off the screen: they get whatever room the rest of the card leaves. */
+    _applyLyricsHeight() {
+        const [, card] = this.get_preferred_height(this.width);
+        const [, lyrics] = this._lyrics.visible ? this._lyrics.get_preferred_height(-1) : [0, 0];
+        this._lyrics.setHeight(this._settings.get_int('lyrics-height'),
+            this._maxHeight - (card - lyrics));
+    }
+
     /* The art bin's geometry and its background-image share one `style`
      * property, so both are written together rather than clobbering each other. */
     _applyArtSize() {
@@ -842,6 +860,9 @@ export const MediaCard = GObject.registerClass({
         this._updateArt();
         this._updateSlider();
         this._updateTimer();
+        /* A title that wraps onto another line leaves the lyrics less room. */
+        if (this._active)
+            this._applyLyricsHeight();
     }
 
     /* Setting `reactive` is enough: St maps it to the `:insensitive` pseudo

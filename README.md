@@ -133,6 +133,7 @@ in on Wayland, because the shell caches ES modules for the life of the process.
 | `card-show-shuffle` / `card-show-loop`            | on              | Shuffle and loop buttons on the card's edges            |
 | `card-show-lyrics-button`                         | on              | Lyrics button in the card, for music players            |
 | `lyrics-online-lookup`                            | off             | Ask LRCLIB when the player and `.lrc` files have none   |
+| `lyrics-height`                                   | 320             | Height of the lyrics in pixels (160–560), made shorter when the screen has no room |
 | `seek-step-seconds`                               | 10              | How far the skip buttons jump, in seconds               |
 | `card-width`                                      | 400             | Card width in pixels (400–560)                          |
 

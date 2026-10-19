@@ -240,6 +240,11 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
             this._switchRow(settings, 'lyrics-online-lookup',
                 _('Look up lyrics online'),
                 _('When the player has none and there is no .lrc file beside the track, search LRCLIB (lrclib.net). The title, artist, album and length of the track are sent, and only while the lyrics are open.'))));
+        lyrics.add(this._bindSensitive(settings, 'card-show-lyrics-button',
+            this._spinRow(settings, 'lyrics-height',
+                _('Lyrics height'),
+                _('Measured in pixels. Made shorter on screens too small for it, so the card always fits.'),
+                160, 560, 20)));
         page.add(lyrics);
 
         return page;

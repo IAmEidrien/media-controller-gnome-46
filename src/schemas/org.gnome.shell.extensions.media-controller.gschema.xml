@@ -183,6 +183,13 @@
       <description>When neither the player nor an .lrc file beside the track has lyrics, ask lrclib.net. The track's title, artist, album and length are sent, and only while the lyrics are open.</description>
     </key>
 
+    <key name="lyrics-height" type="i">
+      <default>320</default>
+      <range min="160" max="560"/>
+      <summary>Height of the lyrics in the card, in pixels</summary>
+      <description>How much of the card the lyrics take while they are open. On a screen without room for that much, the lyrics are made shorter so the card still fits.</description>
+    </key>
+
     <key name="seek-step-seconds" type="i">
       <default>10</default>
       <range min="2" max="20"/>

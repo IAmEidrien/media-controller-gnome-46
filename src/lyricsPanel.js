@@ -99,6 +99,8 @@ export const LyricsPanel = GObject.registerClass({
             visible: false,
             /* So it can open and close by its height. */
             clip_to_allocation: true,
+            /* Until the card has measured the screen; see setHeight(). */
+            style: `height: ${settings.get_int('lyrics-height')}px;`,
         });
 
         this._source = source;
@@ -200,6 +202,18 @@ export const LyricsPanel = GObject.registerClass({
         if (!active)
             this._settle();
         this._reveal(active);
+    }
+
+    /**
+     * @param {number} wanted the height the settings ask for, in pixels
+     * @param {number} room the most the panel may take up, in stage pixels
+     */
+    setHeight(wanted, room) {
+        const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        const fits = Math.floor((room - this.get_theme_node().get_vertical_padding()) / scale);
+        const style = `height: ${Math.max(0, Math.min(wanted, fits))}px;`;
+        if (style !== this.style)
+            this.style = style;
     }
 
     /** @param {object|null} player null when nothing is playing a song */

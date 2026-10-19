@@ -22,6 +22,10 @@ import {loopIconName, nextLoopStatus, playPauseIconName, seekOffset,
 
 const ROLE = 'media-controls';
 
+/* Room for the menu's pointer arrow and borders around the card, in logical
+ * pixels. The stock theme's come to 8; the rest is slack for other themes. */
+const MENU_FRAME = 24;
+
 /* `atEnd` positions are appended after everything already in that panel box —
  * for "far right" that means past the quick settings menu. */
 const PANEL_POSITIONS = {
@@ -101,6 +105,8 @@ class MediaIndicator extends PanelMenu.Button {
         this.menu.addMenuItem(item);
 
         this.menu.connectObject('open-state-changed', (_menu, open) => {
+            if (open)
+                this._card.setMaxHeight(this._roomForCard());
             this._card.setActive(open);
             if (open)
                 this._card.sync();
@@ -121,6 +127,16 @@ class MediaIndicator extends PanelMenu.Button {
             this);
 
         this.sync();
+    }
+
+    /* The shell keeps a menu inside the work area, less the menu's margins; the
+     * card gets that, less the frame the menu draws around it. In stage pixels. */
+    _roomForCard() {
+        const workArea = Main.layoutManager.getWorkAreaForMonitor(
+            Main.layoutManager.primaryIndex);
+        const menu = this.menu.actor;
+        const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        return workArea.height - menu.margin_top - menu.margin_bottom - MENU_FRAME * scale;
     }
 
     /**
