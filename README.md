@@ -28,6 +28,12 @@ Rhythmbox, mpv, and so on.
 </p>
 <p align="center"><em>The panel indicator and the now-playing card.</em></p>
 
+## What's new in 3.1
+
+- **Light card**: the card follows the shell's light style, turning white with
+  dark text and controls when the shell is light, and staying dark as before
+  when it is dark.
+
 ## What's new in 3.0
 
 - **Volume bar** along the bottom of the card, in your accent color, for the
@@ -83,7 +89,8 @@ Rhythmbox, mpv, and so on.
   only appears for music players — not for browsers, nor for films in video
   players.
 - **Configurable panel position**: far left, left, center, right, or far right.
-- Follows the shell theme, including light/dark and your accent color.
+- Follows the shell theme: the card is light in the shell's light style and
+  dark in its dark style, and wears your accent color in both.
 
 Skip buttons only appear for players that support seeking; shuffle and loop
 only for players that expose them over MPRIS. The volume bar sets the player's

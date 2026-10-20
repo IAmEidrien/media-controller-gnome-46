@@ -15,14 +15,11 @@ import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 
 /* The release the notes below describe. Bump both together for a release worth
  * announcing; a release that leaves them alone stays quiet. */
-const RELEASE = '3.0';
+const RELEASE = '3.1';
 
 function releaseNotes() {
     return [
-        _('A volume bar along the bottom of the card sets the volume of the player itself.'),
-        _('Beside it, the player’s name opens a list of every running player, with what each is playing, to switch between.'),
-        _('Players go by their proper names, such as Firefox and Google Chrome.'),
-        _('Album art is bigger at every size, and the card is wider by default.'),
+        _('The card follows the shell’s light style: it turns light when the shell does, and stays dark as before otherwise.'),
     ].map(line => `• ${line}`).join('\n');
 }
 

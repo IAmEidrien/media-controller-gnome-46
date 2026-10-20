@@ -95,6 +95,13 @@ class MediaIndicator extends PanelMenu.Button {
                 this._manager.selectPlayer(busName), this);
 
         this.menu.box.add_style_class_name('mc-card-menu');
+
+        /* The card pins its colors instead of inheriting the popup's, so the
+         * shell's light style is followed by a class rather than by the theme. */
+        St.Settings.get().connectObject('notify::color-scheme',
+            () => this._syncStyleVariant(), this);
+        this._syncStyleVariant();
+
         const item = new PopupMenu.PopupBaseMenuItem({
             activate: false,
             reactive: false,
@@ -127,6 +134,15 @@ class MediaIndicator extends PanelMenu.Button {
             this);
 
         this.sync();
+    }
+
+    /* Everything the card draws, the player list included, sits inside the
+     * menu box, so the one class there switches the whole card's palette. */
+    _syncStyleVariant() {
+        if (Main.getStyleVariant() === 'light')
+            this.menu.box.add_style_class_name('mc-light');
+        else
+            this.menu.box.remove_style_class_name('mc-light');
     }
 
     /* The shell keeps a menu inside the work area, less the menu's margins; the

@@ -1,9 +1,14 @@
 /* Media Controls
  *
- * The card is dark whatever the shell's color scheme, so it pins the dark
- * theme's foreground along with its background — inheriting the light theme's
- * would draw dark controls on the dark card. Only the accent color follows the
- * desktop.
+ * The card pins its foreground along with its background rather than inheriting
+ * the popup's: the dark palette by default, and the light one at the end of this
+ * file under `.mc-light`, which the indicator sets on the menu while the shell
+ * uses its light style. Only the accent color follows the desktop either way.
+ *
+ * Both palettes live in this one file on purpose. The shell would load a
+ * stylesheet-light.css instead, but St only ranks an extension's rules above
+ * the shell theme in the file it loads, not in one that file @imports, so the
+ * variants could not share the rules below without copying all of them.
  */
 
 /* ---------- Panel indicator ---------- */
@@ -48,7 +53,7 @@
 }
 
 /* ---------- Card container ---------- */
-/* The border is pinned too: the light theme's is a pale outline. */
+/* The border is pinned with the background, so it matches the card. */
 .mc-card-menu {
   padding: 0;
   background-color: #222226;
@@ -519,4 +524,142 @@
 .mc-player-row-check {
   icon-size: 16px;
   color: -st-accent-color;
+}
+
+/* ---------- Light style ---------- */
+
+/* Applies under `.mc-light`, set on the menu while the shell uses its light
+ * style. Each rule is the light counterpart of a dark color above: the card
+ * turns white, and the pinned shell colors become the light theme's. Dim text
+ * runs at a higher opacity than its dark twin, since dark-on-white loses more
+ * contrast to the same alpha; each tier lands near its dark contrast. */
+
+.mc-card-menu.mc-light {
+  background-color: #ffffff;
+  border-color: #e6e6eb;
+}
+
+.mc-light .mc-card,
+.mc-light .mc-card-title,
+.mc-light .mc-lyrics-line,
+.mc-light .mc-player-row-title {
+  color: #222226;
+}
+
+.mc-light .mc-card-artist,
+.mc-light .mc-volume-icon {
+  color: rgba(34, 34, 38, 0.8);
+}
+
+.mc-light .mc-card-album {
+  color: rgba(34, 34, 38, 0.6);
+}
+
+.mc-light .mc-lyrics-status-icon {
+  color: rgba(34, 34, 38, 0.4);
+}
+
+.mc-light .mc-lyrics-status-label,
+.mc-light .mc-player-list-title {
+  color: rgba(34, 34, 38, 0.62);
+}
+
+.mc-light .mc-player-picker-arrow {
+  color: rgba(34, 34, 38, 0.7);
+}
+
+.mc-light .mc-player-row-subtitle {
+  color: rgba(34, 34, 38, 0.65);
+}
+
+/* The light theme's .slider colors. */
+.mc-light .mc-card .mc-seek {
+  color: #222226;
+  -barlevel-background-color: rgba(34, 34, 38, 0.1);
+}
+
+.mc-light .mc-card .mc-seek:hover {
+  color: #333339;
+}
+
+.mc-light .mc-card .mc-volume,
+.mc-light .mc-card .mc-volume:hover {
+  -barlevel-background-color: rgba(34, 34, 38, 0.1);
+}
+
+/* The light theme's .message-media-control colors. Every state is restated:
+ * the plain rule outranks the dark :hover and :insensitive rules above. */
+.mc-light .mc-card .message-media-control {
+  color: #222226;
+}
+
+.mc-light .mc-card .message-media-control:hover {
+  background-color: #efeff2;
+  color: #222226;
+}
+
+.mc-light .mc-card .message-media-control:active {
+  background-color: #e9e9ed;
+  color: #222226;
+}
+
+.mc-light .mc-card .message-media-control:insensitive {
+  color: #858588;
+}
+
+.mc-light .mc-card-footer {
+  border-top: 1px solid rgba(34, 34, 38, 0.08);
+}
+
+.mc-light .mc-player-picker {
+  background-color: rgba(34, 34, 38, 0.08);
+}
+
+.mc-light .mc-player-picker:hover,
+.mc-light .mc-player-picker:focus {
+  background-color: rgba(34, 34, 38, 0.14);
+}
+
+.mc-light .mc-player-picker:active,
+.mc-light .mc-player-picker:checked {
+  background-color: rgba(34, 34, 38, 0.2);
+}
+
+.mc-light .mc-player-picker:insensitive {
+  background-color: transparent;
+}
+
+/* A lighter scrim than the dark card's: the white list already stands off a
+ * white card once it is dimmed this far. */
+.mc-light .mc-card-scrim {
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+.mc-light .mc-player-list {
+  background-color: #ffffff;
+  border: 1px solid rgba(34, 34, 38, 0.12);
+  box-shadow: 0 8px 24px 0 rgba(0, 0, 0, 0.2);
+}
+
+.mc-light .mc-player-list-scroll StScrollBar > .vhandle {
+  background-color: rgba(34, 34, 38, 0.22);
+}
+
+.mc-light .mc-player-list-scroll StScrollBar > .vhandle:hover,
+.mc-light .mc-player-list-scroll StScrollBar > .vhandle:active {
+  background-color: rgba(34, 34, 38, 0.4);
+}
+
+.mc-light .mc-player-row:hover,
+.mc-light .mc-player-row:focus {
+  background-color: rgba(34, 34, 38, 0.07);
+}
+
+.mc-light .mc-player-row-active {
+  background-color: rgba(34, 34, 38, 0.1);
+}
+
+.mc-light .mc-player-row-active:hover,
+.mc-light .mc-player-row-active:focus {
+  background-color: rgba(34, 34, 38, 0.14);
 }
