@@ -56,14 +56,28 @@ test('lookup coalesces requests and rejects mismatched timing while preserving l
     };
     const track = {title: 'Song', artists: ['Artist'], album: '', length: 10e6, url: '', lyrics: ''};
     const [first, second] = await Promise.all([source.lookup(track, true), source.lookup(track, true)]);
-    assert.equal(requests, 1);
+    assert.equal(requests, 2);
     assert.equal(first, second);
     assert.equal(first.synced, false);
     assert.equal(first.lines[0].text, 'Right words');
     await source.lookup(track, true);
-    assert.equal(requests, 1, 'successful results are cached');
+    assert.equal(requests, 2, 'successful results are cached');
     source._request = async () => { throw Error('offline'); };
     const local = await source.lookup({...track, title: 'Other', lyrics: 'Local fallback'}, true);
     assert.equal(local.lines[0].text, 'Local fallback');
     await assert.rejects(source.lookup({...track, title: 'Missing'}, true), /offline/);
+});
+
+test('plain exact-match lyrics do not prevent a timed search result', async () => {
+    const {source} = fixture();
+    let requests = 0;
+    source._request = async () => ++requests === 1
+        ? {duration: 10, plainLyrics: 'Plain words'}
+        : [{duration: 10, syncedLyrics: '[00:01]Timed words'}];
+    const lyrics = await source.lookup({title: 'Song', artists: ['Artist'],
+        album: '', length: 10e6, url: '', lyrics: ''}, true);
+    assert.equal(requests, 2);
+    assert.equal(lyrics.synced, true);
+    assert.equal(lyrics.lines[0].text, 'Timed words');
+    source.destroy();
 });

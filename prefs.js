@@ -237,7 +237,7 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
         });
         multiple.add(this._switchRow(settings, 'card-show-player-switcher',
             _('Player switcher'),
-            _('Player icons beside the settings button, for choosing which player the card and panel follow.')));
+            _('A button beside the volume bar names the player on screen, and lists every running player, with what each is playing, for choosing which one the card and panel follow.')));
         multiple.add(this._switchRow(settings, 'pause-others-on-play',
             _('Play one player at a time'),
             _('When a player starts playing, pause whichever other player was playing. Players already running when the extension starts are left alone.')));
@@ -263,6 +263,9 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
         playback.add(this._switchRow(settings, 'card-show-loop',
             _('Loop button'),
             _('Shown at the right edge of the controls. Cycles between off, the whole queue, and one track.')));
+        playback.add(this._switchRow(settings, 'card-show-volume',
+            _('Volume bar'),
+            _('Shown under the controls. Sets the volume of the player itself, not of the whole system. Requires a player that supports it; browsers do not.')));
         page.add(playback);
 
         const lyrics = new Adw.PreferencesGroup({
@@ -275,6 +278,11 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
             this._switchRow(settings, 'lyrics-online-lookup',
                 _('Look up lyrics online'),
                 _('When the player has none and there is no .lrc file beside the track, search LRCLIB (lrclib.net). The title, artist, album and length of the track are sent, and only while the lyrics are open.'))));
+        lyrics.add(this._bindSensitive(settings, 'card-show-lyrics-button',
+            this._spinRow(settings, 'lyrics-height',
+                _('Lyrics height'),
+                _('Measured in pixels. Made shorter on screens too small for it, so the card always fits.'),
+                160, 560, 20)));
         page.add(lyrics);
 
         return page;

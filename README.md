@@ -4,9 +4,9 @@ Maintainer's own space: [HUMANS.md](HUMANS.md), reserved for Eidrien's writing.
 
 GNOME 46 compatibility and convenience fork of
 [naimur900/media-controller-gnome](https://github.com/naimur900/media-controller-gnome),
-based on upstream commit `0d7caf2` (2.4). The formal GitHub fork relationship and
+based on upstream commit `888b5e6` (3.1). The formal GitHub fork relationship and
 upstream history are retained. This fork has its own UUID and only declares
-GNOME 46 support. The upstream release targets GNOME 47–50.
+GNOME 46 support. The upstream release targets GNOME 47–51.
 
 Directed and used by Eidrien on a daily GNOME 46 desktop, with OpenAI Codex
 assistance for implementation, investigation and automated checks. The fork
@@ -29,7 +29,16 @@ Rhythmbox, mpv, and so on.
   <img src="public/img-1.png" alt="Upstream panel indicator and now-playing card" width="700">
 </p>
 
-## Upstream 2.5
+## Upstream 3.1
+
+Includes the redesigned player list, player-volume slider, improved display names
+and untitled local-file titles, resizable animated lyrics, more thorough timed
+lyrics lookup, and card height constraints. New widgets retain GNOME 46
+compatibility and follow this fork’s theme accent integration. The newer Shell
+light-style API is guarded; GNOME 46 retains the dark card palette. Online lyrics
+lookup remains opt-in.
+
+### Earlier 2.5 additions
 
 Includes upstream 2.5's lyrics panel, live-stream seeking fixes, hover-state fixes,
 and scrolling-title improvements, while retaining the GNOME 46 adaptations and

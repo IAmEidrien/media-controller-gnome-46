@@ -1,7 +1,7 @@
 # Media Controller: GNOME 46 public fork
 
 This is a compatibility and convenience fork of `naimur900/media-controller-gnome`,
-based on upstream `0c726520bb91c8c2619a6ac2b38ce601b8133b8c` (2.5). Preserve
+based on upstream `888b5e6428b8ab231eecbca4fedec875d9214081` (3.1). Preserve
 upstream ancestry, copyright notices, and the GPL-2.0-or-later license.
 
 The target is Linux Mint 22 / GNOME Shell 46 on Wayland, with GLib 2.80 and
@@ -16,7 +16,8 @@ testing from syntax checks or mocked constructors.
   complete. Do not commit `schemas/gschemas.compiled` or build ZIPs.
 - Shell 46 box layouts use `vertical`; `orientation` is not an St.BoxLayout
   property there. Preferences must work without Adw.ButtonRow (introduced 1.6).
-  Shell 46 cannot resolve `-st-accent-color`.
+  Shell 46 cannot resolve `-st-accent-color`. Guard newer Shell light-style
+  APIs/signals. Apply theme accents to the volume slider and player-list rows.
 - Theme accents use the standard slider fill through St.ThemeNode color lookup,
   with an optional `-media-controller-accent-color` override and blue fallback.
   Preserve theme listener cleanup, artwork styles/sizing, and neutral icons.

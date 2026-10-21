@@ -19,6 +19,17 @@ const CHUNK_BYTES = 64 * 1024;
  * exists so a long-lived session cannot grow the directory without end. */
 const MAX_CACHED_FILES = 128;
 
+/**
+ * The resolved path, written for a `background-image`. St parses this as CSS,
+ * so a path with a quote in it must not break out.
+ *
+ * @param {string} path a path ArtCache.resolve() returned
+ * @returns {string}
+ */
+export function cssUrl(path) {
+    return `url("${path.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}")`;
+}
+
 export class ArtCache {
     constructor() {
         this._session = new Soup.Session({timeout: 15});

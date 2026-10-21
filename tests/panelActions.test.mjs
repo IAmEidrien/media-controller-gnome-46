@@ -130,7 +130,7 @@ test('player volume is bounded and repeat/shuffle follow their state', () => {
     assert.equal(f.player.shuffle, false);
 });
 
-function mprisFixture() {
+function mprisFixture(kind = 'music') {
     const calls = [];
     const warnings = [];
     const xml = [];
@@ -165,6 +165,9 @@ function mprisFixture() {
                 }};
             }},
         },
+        resolvePlayerIcon: () => ({}),
+        resolvePlayerApp: () => ({kind, name: 'Test player'}),
+        PlayerKind: {BROWSER: 'browser'},
         GLib: {}, console: {warn: value => warnings.push(value)},
     });
     return {player: new MprisPlayer('org.mpris.MediaPlayer2.test'),
@@ -240,4 +243,15 @@ test('MPRIS volume writes avoid unsupported, invalid and read-only players', () 
     });
     assert.doesNotThrow(() => f.player.setVolume(0.55));
     assert.equal(f.warnings.length, 1);
+});
+
+
+test('browser volume is unavailable and MPRIS properties are declared only once', () => {
+    const f = mprisFixture('browser');
+    assert.equal(f.player.canSetVolume, false);
+    f.player.setVolume(0.8);
+    assert.equal(f.playerProxy.Volume, 0.5);
+    const xml = f.xml.find(source => source.includes('name="Volume"'));
+    assert.equal((xml.match(/<property name="Volume"/g) || []).length, 1);
+    assert.equal((xml.match(/<property name="CanControl"/g) || []).length, 1);
 });

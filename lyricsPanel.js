@@ -2,7 +2,7 @@
 /* lyricsPanel.js
  *
  * The card's lyrics. Timed lyrics light up the line being sung and keep it in
- * view; plain lyrics just scroll.
+ * view; plain lyrics look the same but stay put.
  */
 
 import Clutter from 'gi://Clutter';
@@ -37,7 +37,7 @@ const LOOKUP_DELAY_MS = 400;
 const MAX_RETRIES = 2;
 const RETRY_MS = 5000;
 
-const REVEAL_MS = 200;
+const REVEAL_MS = 250;
 const HIGHLIGHT_MS = 200;
 const DIM_OPACITY = 90;
 const FOLLOW_MS = 450;
@@ -48,6 +48,10 @@ const MIN_TICK_MS = 16;
 /* An intro this long gets a line of its own, so something is lit. */
 const INTRO_US = 3 * US_PER_SECOND;
 const BREAK_TEXT = '♪';
+/* While a lookup is under way the status icon breathes, in place of words. */
+const PULSE_MS = 700;
+const PULSE_OPACITY = 100;
+const PULSE_SCALE = 0.88;
 
 function wrap(label) {
     label.clutter_text.line_wrap = true;
@@ -93,6 +97,10 @@ export const LyricsPanel = GObject.registerClass({
             ...boxOrientation(Clutter.Orientation.VERTICAL),
             x_expand: true,
             visible: false,
+            /* So it can open and close by its height. */
+            clip_to_allocation: true,
+            /* Until the card has measured the screen; see setHeight(). */
+            style: `height: ${settings.get_int('lyrics-height')}px;`,
         });
 
         this._source = source;
@@ -100,6 +108,8 @@ export const LyricsPanel = GObject.registerClass({
         this._player = null;
         this._open = false;
         this._active = false;
+        /* Where the panel is headed; `visible` stays on until it closes. */
+        this._expanded = false;
         this._timers = new Map();
 
         /* The track being shown; null makes the next sync look up afresh. */
@@ -107,6 +117,7 @@ export const LyricsPanel = GObject.registerClass({
         this._generation = 0;
         this._retries = 0;
         this._failed = false;
+        this._searching = false;
 
         this._lines = [];
         this._current = -1;
@@ -135,11 +146,13 @@ export const LyricsPanel = GObject.registerClass({
             y_expand: true,
             y_align: Clutter.ActorAlign.CENTER,
         });
-        this._status.add_child(new St.Icon({
+        this._statusIcon = new St.Icon({
             style_class: 'mc-lyrics-status-icon',
             gicon: lyricsIcon(),
             x_align: Clutter.ActorAlign.CENTER,
-        }));
+        });
+        this._statusIcon.set_pivot_point(0.5, 0.5);
+        this._status.add_child(this._statusIcon);
         this._statusLabel = new St.Label({style_class: 'mc-lyrics-status-label'});
         wrap(this._statusLabel);
         this._status.add_child(this._statusLabel);
@@ -178,17 +191,6 @@ export const LyricsPanel = GObject.registerClass({
             return;
         this._open = open;
         this._reveal(open);
-
-        if (open && this.visible) {
-            this.opacity = 0;
-            this.translation_y = -8;
-            this.ease({
-                opacity: 255,
-                translation_y: 0,
-                duration: REVEAL_MS,
-                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-            });
-        }
     }
 
     /** @param {boolean} active whether the card is on screen */
@@ -196,7 +198,22 @@ export const LyricsPanel = GObject.registerClass({
         if (active === this._active)
             return;
         this._active = active;
+        /* A closed card does not finish an animation the next time it opens. */
+        if (!active)
+            this._settle();
         this._reveal(active);
+    }
+
+    /**
+     * @param {number} wanted the height the settings ask for, in pixels
+     * @param {number} room the most the panel may take up, in stage pixels
+     */
+    setHeight(wanted, room) {
+        const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        const fits = Math.floor((room - this.get_theme_node().get_vertical_padding()) / scale);
+        const style = `height: ${Math.max(0, Math.min(wanted, fits))}px;`;
+        if (style !== this.style)
+            this.style = style;
     }
 
     /** @param {object|null} player null when nothing is playing a song */
@@ -229,8 +246,50 @@ export const LyricsPanel = GObject.registerClass({
         this._sync(0);
     }
 
+    /* The card grows and shrinks with the panel rather than jumping. Off
+     * screen there is nothing to watch, so the panel just takes its size. */
+    _expand(expanded) {
+        if (expanded === this._expanded)
+            return;
+        this._expanded = expanded;
+        if (!this._active) {
+            this._settle();
+            return;
+        }
+
+        /* Mid-animation, this picks up wherever the panel has got to. */
+        const wasVisible = this.visible;
+        const from = wasVisible ? this.height : 0;
+        this.remove_transition('height');
+        this.remove_transition('opacity');
+        this.set_height(-1);
+        this.visible = true;
+        const [, natural] = this.get_preferred_height(-1);
+
+        if (!wasVisible)
+            this.opacity = 0;
+        this.height = from;
+        this.ease({
+            height: expanded ? natural : 0,
+            opacity: expanded ? 255 : 0,
+            duration: REVEAL_MS,
+            mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+            onComplete: () => this._settle(),
+        });
+    }
+
+    /* Back to the natural height when open, out of the layout when closed. */
+    _settle() {
+        this.remove_transition('height');
+        this.remove_transition('opacity');
+        this.set_height(-1);
+        this.opacity = 255;
+        this.visible = this._expanded;
+    }
+
     _sync(delay) {
-        this.visible = this._open && this._player !== null;
+        this._expand(this._open && this._player !== null);
+        this._updatePulse();
 
         if (!this._shown()) {
             /* A lookup that has not started yet starts over when shown again. */
@@ -251,7 +310,7 @@ export const LyricsPanel = GObject.registerClass({
         this._generation++;
         this._retries = 0;
         this._failed = false;
-        this._showStatus(_('Looking for lyrics…'));
+        this._showStatus(null);
         this._schedule('lookup', delay, () => this._lookup());
     }
 
@@ -287,11 +346,38 @@ export const LyricsPanel = GObject.registerClass({
         }
     }
 
+    /* No text means a lookup is under way, which the icon shows by pulsing. */
     _showStatus(text) {
         this._clearLines();
-        this._statusLabel.text = text;
+        this._statusLabel.text = text ?? '';
+        this._statusLabel.visible = text !== null;
         this._status.visible = true;
         this._scrollView.visible = false;
+        this._searching = text === null;
+        this._updatePulse();
+    }
+
+    /* Only while the panel is seen, so a closed card does not keep animating.
+     * The pulse starts and ends at rest, so with animations off nothing moves. */
+    _updatePulse() {
+        const icon = this._statusIcon;
+        const pulse = this._searching && this._shown();
+        if (pulse === (icon.get_transition('opacity') !== null))
+            return;
+
+        icon.remove_all_transitions();
+        icon.set({opacity: 255, scale_x: 1, scale_y: 1});
+        if (pulse) {
+            icon.ease({
+                opacity: PULSE_OPACITY,
+                scale_x: PULSE_SCALE,
+                scale_y: PULSE_SCALE,
+                duration: PULSE_MS,
+                mode: Clutter.AnimationMode.EASE_IN_OUT_SINE,
+                repeatCount: -1,
+                autoReverse: true,
+            });
+        }
     }
 
     _clearLines() {
@@ -310,14 +396,25 @@ export const LyricsPanel = GObject.registerClass({
         this._status.visible = false;
         this._scrollView.visible = true;
         this._scrollView.vadjustment.value = 0;
+        this._searching = false;
+        this._updatePulse();
 
+        /* Set out like timed lines, but all lit and never followed, since no
+         * line is known to be the one being sung. */
         if (!lyrics.synced) {
-            const label = new St.Label({
-                style_class: 'mc-lyrics-plain',
-                text: lyrics.lines.map(line => line.text).join('\n'),
-            });
-            wrap(label);
-            this._linesBox.add_child(label);
+            for (const {text} of lyrics.lines) {
+                if (!text) {
+                    this._linesBox.add_child(new St.Widget({style_class: 'mc-lyrics-break'}));
+                    continue;
+                }
+                const label = new St.Label({text});
+                wrap(label);
+                this._linesBox.add_child(new St.Bin({
+                    style_class: 'mc-lyrics-line',
+                    child: label,
+                    x_expand: true,
+                }));
+            }
             return;
         }
 

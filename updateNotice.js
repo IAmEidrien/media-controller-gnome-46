@@ -15,13 +15,11 @@ import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 
 /* The release the notes below describe. Bump both together for a release worth
  * announcing; a release that leaves them alone stays quiet. */
-const RELEASE = '2.5';
+const RELEASE = '3.1';
 
 function releaseNotes() {
     return [
-        _('Lyrics in the card, following along line by line. Contributed by FrigoreD.'),
-        _('The card’s controls are readable in light mode.'),
-        _('Fixes for live streams, switching players and the scrolling title.'),
+        _('The card follows the shell’s light style: it turns light when the shell does, and stays dark as before otherwise.'),
     ].map(line => `• ${line}`).join('\n');
 }
 

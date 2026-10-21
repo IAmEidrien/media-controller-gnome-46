@@ -10,7 +10,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 
-import {PlayerKind, resolvePlayerIcon, resolvePlayerKind} from './playerIcons.js';
+import {PlayerKind, resolvePlayerApp, resolvePlayerIcon} from './playerIcons.js';
 
 const GENERIC_ICON = 'audio-x-generic-symbolic';
 
@@ -118,6 +118,39 @@ function asNumber(value) {
     return 0;
 }
 
+/**
+ * For a player with no desktop file to take a name from. Some put an app id
+ * where a name belongs — Firefox's "Mozilla org.mozilla.firefox" — and the
+ * id's last part is the best name on offer: "Mozilla Firefox". Only runs of
+ * three or more parts, each starting with a letter, count as an id, so a
+ * version number or a short dotted name is left alone.
+ *
+ * @param {string} identity the MPRIS Identity
+ * @returns {string}
+ */
+function tidyIdentity(identity) {
+    return identity.replace(/\b[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9_-]*){2,}\b/gi, id => {
+        const last = id.slice(id.lastIndexOf('.') + 1);
+        return last.charAt(0).toUpperCase() + last.slice(1);
+    });
+}
+
+/**
+ * A title for a local file that came without one. VLC sends no title for a
+ * file with no title tag, only its URL, and the file's name is what VLC's own
+ * window shows then. The extension is dropped: `film.mkv` reads as `film`.
+ * Anything but a local file gives nothing; a stream's address is not a title.
+ *
+ * @param {string} url the track's `xesam:url`
+ * @returns {string}
+ */
+function titleFromUrl(url) {
+    if (!url.startsWith('file://'))
+        return '';
+    const name = Gio.File.new_for_uri(url).get_basename() ?? '';
+    return name.replace(/\.[a-z0-9]{1,5}$/i, '');
+}
+
 /** `song.flac` but not `film.mkv`, by the name alone. */
 function isAudioFile(url) {
     return url.startsWith('file://') &&
@@ -211,6 +244,15 @@ export const MprisPlayer = GObject.registerClass({
 
     get title() {
         return asString(this._meta('xesam:title'));
+    }
+
+    /**
+     * The title, or for a file sent without one, the file's name. For showing
+     * only: the lyrics lookup wants `title` as the player sent it, not a file
+     * name posing as a song title.
+     */
+    get displayTitle() {
+        return this.title || titleFromUrl(this.url);
     }
 
     get artist() {
@@ -317,6 +359,18 @@ export const MprisPlayer = GObject.registerClass({
         return this.shuffle !== null;
     }
 
+    /**
+     * Browsers are left out: Chromium and its derivatives publish a Volume
+     * that always reads 1.0 and silently ignore writes to it, so a slider for
+     * them would move nothing. CanControl false means the player takes no
+     * commands at all.
+     */
+    get canSetVolume() {
+        return this.volume !== null &&
+            (this._playerProxy?.CanControl ?? true) &&
+            this.kind !== PlayerKind.BROWSER;
+    }
+
     get canRaise() {
         return this._appProxy?.CanRaise ?? false;
     }
@@ -347,13 +401,21 @@ export const MprisPlayer = GObject.registerClass({
                 desktopEntry: this.desktopEntry,
                 identity: this.identity,
             };
-            this._app = {key, icon: resolvePlayerIcon(hints), kind: resolvePlayerKind(hints)};
+            this._app = {key, icon: resolvePlayerIcon(hints), ...resolvePlayerApp(hints)};
         }
         return this._app;
     }
 
     get kind() {
         return this._resolveApp().kind;
+    }
+
+    /**
+     * The app's name as the desktop shows it, for anything the user reads.
+     * `identity` stays the raw MPRIS value, which the app lookup matches on.
+     */
+    get displayName() {
+        return this._resolveApp().name ?? tidyIdentity(this.identity);
     }
 
     /* Music players always, browsers never, anything else for local audio files. */
@@ -419,7 +481,7 @@ export const MprisPlayer = GObject.registerClass({
     }
 
     setVolume(volume) {
-        if (!this._playerProxy || !this.canControl || this.volume === null ||
+        if (!this._playerProxy || !this.canSetVolume ||
             !Number.isFinite(volume))
             return;
         try {

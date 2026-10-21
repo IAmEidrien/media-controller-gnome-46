@@ -27,6 +27,10 @@ const ROLE = 'media-controls';
 const BUTTON_BACK = 8;
 const BUTTON_FORWARD = 9;
 
+/* Room for the menu's pointer arrow and borders around the card, in logical
+ * pixels. The stock theme's come to 8; the rest is slack for other themes. */
+const MENU_FRAME = 24;
+
 /* `atEnd` positions are appended after everything already in that panel box —
  * for "far right" that means past the quick settings menu. */
 const PANEL_POSITIONS = {
@@ -109,6 +113,16 @@ class MediaIndicator extends PanelMenu.Button {
                 this._manager.selectPlayer(busName), this);
 
         this.menu.box.add_style_class_name('mc-card-menu');
+
+        /* The card pins its colors instead of inheriting the popup's, so the
+         * shell's light style is followed by a class rather than by the theme. */
+        // GNOME 46 has neither the Shell light-style API nor this St signal.
+        if (typeof Main.getStyleVariant === 'function') {
+            St.Settings.get().connectObject('notify::color-scheme',
+                () => this._syncStyleVariant(), this);
+        }
+        this._syncStyleVariant();
+
         const item = new PopupMenu.PopupBaseMenuItem({
             activate: false,
             reactive: false,
@@ -119,6 +133,8 @@ class MediaIndicator extends PanelMenu.Button {
         this.menu.addMenuItem(item);
 
         this.menu.connectObject('open-state-changed', (_menu, open) => {
+            if (open)
+                this._card.setMaxHeight(this._roomForCard());
             this._card.setActive(open);
             if (open)
                 this._card.sync();
@@ -139,6 +155,25 @@ class MediaIndicator extends PanelMenu.Button {
             this);
 
         this.sync();
+    }
+
+    /* Everything the card draws, the player list included, sits inside the
+     * menu box, so the one class there switches the whole card's palette. */
+    _syncStyleVariant() {
+        if (Main.getStyleVariant?.() === 'light')
+            this.menu.box.add_style_class_name('mc-light');
+        else
+            this.menu.box.remove_style_class_name('mc-light');
+    }
+
+    /* The shell keeps a menu inside the work area, less the menu's margins; the
+     * card gets that, less the frame the menu draws around it. In stage pixels. */
+    _roomForCard() {
+        const workArea = Main.layoutManager.getWorkAreaForMonitor(
+            Main.layoutManager.primaryIndex);
+        const menu = this.menu.actor;
+        const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        return workArea.height - menu.margin_top - menu.margin_bottom - MENU_FRAME * scale;
     }
 
     /**
@@ -407,8 +442,8 @@ class MediaIndicator extends PanelMenu.Button {
     /** The full text; the label itself truncates or scrolls it. */
     _panelText(player) {
         const parts = [];
-        if (this._prefs.showTitle && player.title)
-            parts.push(player.title);
+        if (this._prefs.showTitle && player.displayTitle)
+            parts.push(player.displayTitle);
         if (this._prefs.showArtist && player.artist)
             parts.push(player.artist);
         return parts.join(' · ');

@@ -71,6 +71,16 @@ class Actor extends Signals {
     has_style_class_name(name) { return this.classes.has(name); }
     add_css_class(name) { this.classes.add(name); }
     remove_all_transitions() {}
+    remove_transition() {}
+    get_transition() { return null; }
+    set(params) { Object.assign(this, params); }
+    set_height(height) { this.height = height; }
+    get_preferred_height() { return [0, 300]; }
+    get_theme_node() { return {get_vertical_padding: () => 0}; }
+    block_signal_handler() {}
+    unblock_signal_handler() {}
+    show() { this.visible = true; }
+    hide() { this.visible = false; }
     set_pivot_point() {}
     set_scale() {}
     ease(params) { Object.assign(this, params); }
@@ -133,15 +143,17 @@ function fixture() {
     const api = {
         _: text => text,
         global: {stage: {}},
-        St: {Widget: Actor, BoxLayout, Button: Actor, Icon: Actor, Label: Actor,
-            ScrollView, PolicyType: {NEVER: 0, EXTERNAL: 1},
+        St: {Widget: Actor, Bin: Actor, BoxLayout, Button: Actor, Icon: Actor, Label: Actor,
+            ScrollView, PolicyType: {NEVER: 0, EXTERNAL: 1, AUTOMATIC: 2},
+            DirectionType: {UP: 0, DOWN: 1, TAB_FORWARD: 2, TAB_BACKWARD: 3},
+            ThemeContext: {get_for_stage: () => ({scale_factor: 1})},
             Settings: {get: () => shellSettings}},
         Clutter: {Orientation: {HORIZONTAL: 0, VERTICAL: 1}, ActorAlign: {CENTER: 0, START: 1, END: 2},
             EventType: {BUTTON_PRESS: 1, TOUCH_BEGIN: 2, BUTTON_RELEASE: 3, SCROLL: 4},
             ScrollDirection: {UP: 0, DOWN: 1, LEFT: 2, RIGHT: 3, SMOOTH: 4},
             BUTTON_PRIMARY: 1, BUTTON_MIDDLE: 2, BUTTON_SECONDARY: 3,
             EVENT_PROPAGATE: 0, EVENT_STOP: 1,
-            FixedLayout: class {}, AnimationMode: {LINEAR: 0}},
+            BinLayout: class {}, FixedLayout: class {}, AnimationMode: {LINEAR: 0}},
         GObject: {registerClass: (...args) => args.at(-1), TYPE_STRING: 0},
         Pango: {EllipsizeMode: {END: 0, NONE: 1}, WrapMode: {WORD_CHAR: 0}},
         // No ButtonRow: it is not part of libadwaita 1.5.
@@ -152,6 +164,7 @@ function fixture() {
         Gio: {FileIcon: Actor, File: {new_for_uri: () => ({get_parent: () => ({resolve_relative_path: path => path})})}, SettingsBindFlags: {DEFAULT: 0, GET: 1}, FileQueryInfoFlags: {NONE: 0}},
         GLib: {PRIORITY_DEFAULT: 0, get_monotonic_time: () => 0,
             timeout_add: () => 1, timeout_add_seconds: () => 2, Source: {remove() {}}},
+        Main: {},
         Extension: class {},
         ExtensionPreferences: class {getSettings() { return settings; }},
         Slider: Actor,
@@ -169,6 +182,8 @@ function fixture() {
     Object.assign(api, load('lyricsPanel.js', ['LyricsPanel', 'lyricsIcon'], api));
     Object.assign(api, load('equalizer.js', ['Equalizer'], api));
     Object.assign(api, load('scrollingLabel.js', ['ScrollingLabel'], api));
+    Object.assign(api, load('artCache.js', ['cssUrl'], api));
+    Object.assign(api, load('playerList.js', ['PlayerList'], api));
     Object.assign(api, load('mediaCard.js', ['MediaCard'], api));
     const {MediaIndicator} = load('extension.js', ['MediaIndicator'], api);
     const {MediaControlsPreferences} = load('prefs.js', ['MediaControlsPreferences'], api);
@@ -176,6 +191,7 @@ function fixture() {
     manager.activePlayer = null;
     manager.readyPlayers = [];
     manager.cyclePlayer = () => {};
+    manager.selectPlayer = () => {};
     let preferencesOpened = 0;
     const indicator = new MediaIndicator({openPreferences() { preferencesOpened++; }}, settings,
         {resolve: async () => null}, {lookup: async () => null}, manager);
@@ -233,12 +249,13 @@ test('lyrics reject stale track responses and clean up settings on destruction',
     panel.update(track('Second'));
     finish({synced: false, lines: [{time: null, text: 'Stale first lyrics'}]});
     await oldLookup;
-    assert.equal(panel._statusLabel.text, 'Looking for lyrics…');
+    assert.equal(panel._statusLabel.text, '');
+    assert.equal(panel._statusLabel.visible, false);
     assert.equal(panel._linesBox.children.length, 0);
     panel._source = {lookup: async () => ({synced: false,
         lines: [{time: null, text: 'Second lyrics'}]})};
     await panel._lookup();
-    assert.equal(panel._linesBox.children[0].text, 'Second lyrics');
+    assert.equal(panel._linesBox.children[0].child.text, 'Second lyrics');
     panel.destroy();
     assert.ok([...f.settings.listeners.values()].every(listener => listener.owner !== panel));
     assert.equal(panel._timers.size, 0);
@@ -264,7 +281,7 @@ test('failed position polls retain the last position and lyrics toggle follows t
 test('panel, card, scrolling label and equalizer construct with GNOME 46 box properties', () => {
     const f = fixture();
     assert.ok(f.boxes.length >= 14, 'all nested layouts are constructed');
-    assert.equal(f.indicator._card.vertical, true);
+    assert.equal(f.indicator._card._content.vertical, true);
     assert.equal(f.indicator._box.vertical, false);
     assert.equal(f.indicator._card._equalizer.vertical, false);
     assert.equal(f.indicator._label._box.vertical, false);
@@ -562,13 +579,13 @@ test('large fallback app icons retain fixed artwork and panel sizes', () => {
     const largeIcon = {nativeWidth: 4096, nativeHeight: 4096};
     card._setFallbackIcon({appIcon: largeIcon, hasAppIcon: true});
     assert.equal(card._artFallback.gicon, largeIcon);
-    assert.equal(card._artFallback.icon_size, 40);
-    assert.match(card._artButton.style, /width: 88px; height: 88px;/);
+    assert.equal(card._artFallback.icon_size, 60);
+    assert.match(card._artButton.style, /width: 136px; height: 136px;/);
     assert.equal(f.indicator._playerIcon.icon_size, 16);
-    f.values['card-art-size'] = 'large';
+    f.values['card-art-size'] = 'medium';
     f.settings.emit('changed::card-art-size');
-    assert.equal(card._artFallback.icon_size, 56);
-    assert.match(card._artButton.style, /width: 120px; height: 120px;/);
+    assert.equal(card._artFallback.icon_size, 46);
+    assert.match(card._artButton.style, /width: 104px; height: 104px;/);
 });
 
 test('live accents reach panel/card modes without replacing artwork or coloring ordinary icons', () => {
@@ -595,7 +612,7 @@ test('live accents reach panel/card modes without replacing artwork or coloring 
     assert.match(card._slider.style, /-barlevel-active-background-color: rgba\(224, 27, 36, 1\)/);
     assert.ok(card._equalizer._bars.every(bar =>
         bar.style === 'background-color: rgba(224, 27, 36, 1);'));
-    const geometry = /width: 88px; height: 88px; border-radius: 16px;/;
+    const geometry = /width: 136px; height: 136px; border-radius: 22px;/;
     assert.match(card._artButton.style, geometry);
     assert.match(card._artButton.style, /background-image: url\("\/tmp\/cover art.png"\)/);
     assert.match(card._artButton.style, /border-color: rgba\(224, 27, 36, 1\)/);
@@ -620,4 +637,71 @@ test('live accents reach panel/card modes without replacing artwork or coloring 
         assert.equal(mode.child.style, null);
         assert.ok(!mode.classes.has('mc-mode-on'));
     }
+});
+
+test('GNOME 46 does not subscribe to the unavailable Shell light-style signal', () => {
+    const f = fixture();
+    const shell = f.api.St.Settings.get();
+    assert.ok([...shell.listeners.values()].every(item => item.name !== 'notify::color-scheme'));
+    assert.ok(!f.indicator.menu.box.classes.has('mc-light'));
+});
+
+test('player list keeps selection, accents and stale artwork isolated by row', async () => {
+    const f = fixture();
+    const list = f.indicator._card._playerList;
+    const player = (busName, title) => Object.assign(new Signals(), {
+        busName, displayTitle: title, displayName: busName, artist: 'Artist',
+        appIcon: {}, artUrl: null, isPlaying: false,
+    });
+    const first = player('First', 'Track one');
+    const second = player('Second', 'Track two');
+    list.setPlayers([first, second], second.busName);
+    list.setAccentColor('rgba(224, 27, 36, 1)');
+    list.open();
+    assert.equal(list._rowsBox.children[0], list._rows.get('Second').button);
+    assert.equal(list._rows.get('Second').check.opacity, 255);
+    assert.equal(list._rows.get('First').check.opacity, 0);
+    for (const row of list._rows.values())
+        assert.equal(row.check.style, 'color: rgba(224, 27, 36, 1);');
+    let selected;
+    list.connect('player-selected', (_list, name) => { selected = name; });
+    list._rows.get('First').button.emit('clicked');
+    assert.equal(selected, 'First');
+    let resolveArt;
+    list._artCache.resolve = () => new Promise(resolve => { resolveArt = resolve; });
+    first.artUrl = 'old';
+    first.emit('changed');
+    const row = list._rows.get('First');
+    list.setPlayers([second], second.busName);
+    resolveArt('/tmp/stale-cover.png');
+    await Promise.resolve();
+    assert.equal(row.art.style, null);
+    assert.ok([...first.listeners.values()].every(item => item.owner !== list));
+    list.close();
+});
+
+test('new card volume slider follows player capabilities and the fork accent', () => {
+    const f = fixture();
+    const card = f.indicator._card;
+    const writes = [];
+    const player = Object.assign(new Signals(), {
+        busName: 'player', displayTitle: 'Track', displayName: 'Player', title: 'Track',
+        artist: '', album: '', appIcon: {}, hasAppIcon: true, artUrl: null,
+        length: 0, volume: 0.5, canSetVolume: true, isPlaying: false,
+        getPosition: async () => 0,
+        setVolume: value => writes.push(value),
+    });
+    card.setPlayer(player);
+    assert.equal(card._volumeBox.visible, true);
+    assert.equal(card._volumeSlider.value, 0.5);
+    card._volumeSlider.value = 0.7;
+    card._volumeSlider.emit('notify::value');
+    assert.deepEqual(writes, [0.7]);
+    card.setAccentColor('rgba(224, 27, 36, 1)');
+    assert.match(card._volumeSlider.style, /-barlevel-active-background-color: rgba\(224, 27, 36, 1\)/);
+    player.canSetVolume = false;
+    card.sync();
+    assert.equal(card._volumeBox.visible, false);
+    card.destroy();
+    assert.equal(card._volumeHoldId, 0);
 });
