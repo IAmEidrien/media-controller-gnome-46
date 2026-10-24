@@ -1,10 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-/* equalizer.js
- *
- * A few bars that bob while something is playing. Purely decorative: MPRIS
- * exposes no audio levels, so the heights are invented rather than measured.
- * The point is only to signal "this is playing" at a glance.
- */
+/* equalizer.js: decorative bars that bob while something is playing. MPRIS
+ * exposes no audio levels, so the heights are random. */
 
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
@@ -15,13 +11,13 @@ import {boxOrientation} from './compat.js';
 
 const BAR_COUNT = 4;
 
-/* The container is BAR_MAX tall, so the bars grow upward from a fixed baseline
- * and the header never reflows as they move. */
+/* The container is BAR_MAX tall (stylesheet), so the bars grow from a fixed
+ * baseline and the header never reflows. */
 const BAR_MIN = 3;
 const BAR_MAX = 12;
 
-/* One step per animation frame group; long enough to read as a bounce rather
- * than a flicker, short enough to look alive. */
+/* The bars jump rather than ease: an ease repaints the card on every frame it
+ * runs, which kept the open card at the full frame rate for a decoration. */
 const STEP_MS = 260;
 
 export const Equalizer = GObject.registerClass(
@@ -30,8 +26,6 @@ class Equalizer extends St.BoxLayout {
         super._init({
             style_class: 'mc-equalizer',
             ...boxOrientation(Clutter.Orientation.HORIZONTAL),
-            /* The widget centres against its neighbours; the bars inside it hang
-             * from its bottom edge, the way a level meter reads. */
             y_align: Clutter.ActorAlign.CENTER,
             x_align: Clutter.ActorAlign.END,
         });
@@ -68,7 +62,6 @@ class Equalizer extends St.BoxLayout {
         this._update();
     }
 
-    /** The player is actually playing, rather than paused or stopped. */
     setPlaying(playing) {
         if (playing === this._playing)
             return;
@@ -76,8 +69,8 @@ class Equalizer extends St.BoxLayout {
         this._update();
     }
 
-    /* Animating a popup nobody is looking at is wasted compositor work, so the
-     * bars only move while the card is open *and* audio is playing. */
+    /* Only animate while on screen and playing: anything else is wasted
+     * compositor work. */
     _update() {
         const wanted = this._active && this._playing &&
             St.Settings.get().enable_animations;
@@ -93,27 +86,19 @@ class Equalizer extends St.BoxLayout {
         }
     }
 
+    /* Whole pixels keep the bar edges crisp. */
     _step() {
-        for (const bar of this._bars) {
-            bar.remove_all_transitions();
-            bar.ease({
-                height: BAR_MIN + Math.random() * (BAR_MAX - BAR_MIN),
-                duration: STEP_MS,
-                mode: Clutter.AnimationMode.EASE_IN_OUT_SINE,
-            });
-        }
+        for (const bar of this._bars)
+            bar.height = Math.round(BAR_MIN + Math.random() * (BAR_MAX - BAR_MIN));
     }
 
-    /* Settle back to the baseline: a paused player shows a flat meter, which is
-     * also what someone with animations switched off sees. */
+    /* A flat meter: paused, or animations switched off. */
     _stop() {
         if (this._timeoutId)
             GLib.Source.remove(this._timeoutId);
         this._timeoutId = 0;
 
-        for (const bar of this._bars) {
-            bar.remove_all_transitions();
+        for (const bar of this._bars)
             bar.height = BAR_MIN;
-        }
     }
 });

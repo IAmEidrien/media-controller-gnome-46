@@ -1,10 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-/* mpris.js
- *
- * Talks to any application implementing the MPRIS2 spec on the session bus.
- * Exposes a single `MprisManager` that tracks every running player and picks
- * one "active" player for the UI to render.
- */
+/* mpris.js: tracks every MPRIS2 player on the session bus and picks one
+ * "active" player for the UI to render. */
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -19,12 +15,11 @@ const MPRIS_PREFIX = 'org.mpris.MediaPlayer2.';
 const PLAYER_IFACE = 'org.mpris.MediaPlayer2.Player';
 const PROPS_IFACE = 'org.freedesktop.DBus.Properties';
 
-/* playerctld mirrors whichever player is active, which would show up as a
- * duplicate of a player we already track. */
+/* playerctld mirrors the active player and would show up as a duplicate. */
 const IGNORED_BUS_NAMES = ['org.mpris.MediaPlayer2.playerctld'];
 
-/* Browsers report a live stream's infinite duration as INT64_MAX µs, or close
- * to it. Nothing that runs a year or longer is a real track. */
+/* Browsers report a live stream's length as INT64_MAX µs or close to it;
+ * nothing a year or longer is a real track. */
 const MAX_TRACK_LENGTH = 365 * 24 * 3600 * 1000000;
 
 const DBusIface = `
@@ -88,7 +83,7 @@ const PlayerIface = `
   </interface>
 </node>`;
 
-/** Unwrap a GLib.Variant coming out of an a{sv} without assuming its type. */
+/* Unwrap a value from an a{sv} without assuming its type. */
 function unwrap(variant) {
     if (!variant)
         return null;
@@ -99,7 +94,7 @@ function unwrap(variant) {
     }
 }
 
-/** MPRIS metadata is famously inconsistent; coerce whatever we get to a string. */
+/* MPRIS metadata is famously inconsistent; coerce whatever comes to a string. */
 function asString(value) {
     if (value === null || value === undefined)
         return '';
@@ -118,16 +113,10 @@ function asNumber(value) {
     return 0;
 }
 
-/**
- * For a player with no desktop file to take a name from. Some put an app id
- * where a name belongs — Firefox's "Mozilla org.mozilla.firefox" — and the
- * id's last part is the best name on offer: "Mozilla Firefox". Only runs of
- * three or more parts, each starting with a letter, count as an id, so a
- * version number or a short dotted name is left alone.
- *
- * @param {string} identity the MPRIS Identity
- * @returns {string}
- */
+/* For a player with no desktop file to take a name from. Some put an app id
+ * where a name belongs ("Mozilla org.mozilla.firefox"); its last part is the
+ * best name on offer. Only runs of three or more letter-led parts count as an
+ * id, so version numbers and short dotted names are left alone. */
 function tidyIdentity(identity) {
     return identity.replace(/\b[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9_-]*){2,}\b/gi, id => {
         const last = id.slice(id.lastIndexOf('.') + 1);
@@ -135,15 +124,8 @@ function tidyIdentity(identity) {
     });
 }
 
-/**
- * A title for a local file that came without one. VLC sends no title for a
- * file with no title tag, only its URL, and the file's name is what VLC's own
- * window shows then. The extension is dropped: `film.mkv` reads as `film`.
- * Anything but a local file gives nothing; a stream's address is not a title.
- *
- * @param {string} url the track's `xesam:url`
- * @returns {string}
- */
+/* A title for a local file sent without one (VLC sends only the URL for an
+ * untagged file): its name without the extension. Streams give nothing. */
 function titleFromUrl(url) {
     if (!url.startsWith('file://'))
         return '';
@@ -151,16 +133,14 @@ function titleFromUrl(url) {
     return name.replace(/\.[a-z0-9]{1,5}$/i, '');
 }
 
-/** `song.flac` but not `film.mkv`, by the name alone. */
+/* `song.flac` but not `film.mkv`, by the name alone. */
 function isAudioFile(url) {
     return url.startsWith('file://') &&
         Gio.content_type_is_a(Gio.content_type_guess(url, null)[0], 'audio/*');
 }
 
-/* Every D-Bus call here can lose a race with the player leaving the bus, and
- * they all fail the same way. Funnelling the warnings through one place keeps
- * the reporting consistent and the logging sparse, as the review guidelines
- * ask. `context` names what failed; the trailing message comes from the error. */
+/* Any D-Bus call can race the player leaving the bus. One helper keeps the
+ * warnings consistent and sparse, as the EGO review guidelines ask. */
 function logError(context, error) {
     console.warn(`media-controls: ${context}: ${error.message}`);
 }
@@ -185,15 +165,15 @@ export const MprisPlayer = GObject.registerClass({
         this._propsChangedId = 0;
         this._seekedId = 0;
 
-        /* The wrapper classes are built here rather than at module scope:
-         * modules stay loaded across disable/enable, so nothing GObject-related
-         * may be created at import time. */
+        /* Built here, not at module scope: modules stay loaded across
+         * disable/enable, so nothing GObject-related may be created at import
+         * time. */
         const PlayerProxy = Gio.DBusProxy.makeProxyWrapper(PlayerIface);
         const MprisProxy = Gio.DBusProxy.makeProxyWrapper(MprisIface);
 
         new PlayerProxy(Gio.DBus.session, busName, MPRIS_PATH, (proxy, error) => {
             if (error) {
-                /* CANCELLED means destroy() ran while the init was in flight. */
+                /* CANCELLED: destroy() ran while the init was in flight. */
                 if (!error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
                     logError(`player proxy for ${busName}`, error);
                 return;
@@ -210,8 +190,8 @@ export const MprisPlayer = GObject.registerClass({
 
         new MprisProxy(Gio.DBus.session, busName, MPRIS_PATH, (proxy, error) => {
             if (error) {
-                /* Cancelled on destroy — and the app interface is optional in
-                 * practice anyway; not fatal. */
+                /* Cancelled on destroy, and the interface is optional in
+                 * practice anyway. */
                 return;
             }
             this._appProxy = proxy;
@@ -223,15 +203,12 @@ export const MprisPlayer = GObject.registerClass({
         return this._playerProxy !== null;
     }
 
-    /**
-     * Reading `proxy.Metadata` deep-unpacks the whole a{sv} every time, and a
-     * single UI sync asks for half a dozen of its keys. Unpack it once per
-     * PropertiesChanged instead; the handler above drops the cache.
-     */
+    /* Reading proxy.Metadata deep-unpacks the whole a{sv}, and one sync asks
+     * for half a dozen keys, so it is unpacked once per PropertiesChanged. */
     _metadataDict() {
         if (this._metadata)
             return this._metadata;
-        /* Nothing to cache until the proxy lands; it emits 'changed' when it does. */
+        /* Nothing to cache until the proxy lands; it emits 'changed' then. */
         if (!this._playerProxy)
             return {};
         this._metadata = this._playerProxy.Metadata ?? {};
@@ -246,11 +223,8 @@ export const MprisPlayer = GObject.registerClass({
         return asString(this._meta('xesam:title'));
     }
 
-    /**
-     * The title, or for a file sent without one, the file's name. For showing
-     * only: the lyrics lookup wants `title` as the player sent it, not a file
-     * name posing as a song title.
-     */
+    /* The title, or a file's name when it has none. For display only: lyrics
+     * lookups want `title` as the player sent it. */
     get displayTitle() {
         return this.title || titleFromUrl(this.url);
     }
@@ -285,7 +259,7 @@ export const MprisPlayer = GObject.registerClass({
         return asString(this._meta('xesam:asText'));
     }
 
-    /** Track length in microseconds, or 0 when the player does not report it. */
+    /* In microseconds; 0 when the player does not report it. */
     get length() {
         const length = asNumber(this._meta('mpris:length'));
         return length > 0 && length < MAX_TRACK_LENGTH ? length : 0;
@@ -304,8 +278,8 @@ export const MprisPlayer = GObject.registerClass({
         return typeof rate === 'number' && Number.isFinite(rate) && rate > 0 ? rate : 1;
     }
 
-    /* Some players omit the Can* properties entirely. Assume the capability is
-     * present in that case so we do not grey out buttons that actually work. */
+    /* Some players omit the Can* properties; assume the capability rather than
+     * grey out buttons that work. */
     get canPlay() {
         return this._playerProxy?.CanPlay ?? true;
     }
@@ -337,10 +311,9 @@ export const MprisPlayer = GObject.registerClass({
         return this._playerProxy?.CanSeek ?? false;
     }
 
-    /* LoopStatus and Shuffle are optional in MPRIS. Here `null` means the
-     * player does not implement the property at all, which the UI turns into
-     * "no button" — unlike the Can* fallbacks above, absence is a capability
-     * signal, not a value to guess. */
+    /* LoopStatus and Shuffle are optional. null means not implemented, which
+     * the UI turns into no button: unlike the Can* fallbacks, absence is a
+     * capability signal here. */
     get loopStatus() {
         const status = this._playerProxy?.LoopStatus;
         return typeof status === 'string' ? status : null;
@@ -387,12 +360,9 @@ export const MprisPlayer = GObject.registerClass({
         return this._appProxy?.DesktopEntry ?? '';
     }
 
-    /**
-     * Resolution walks the desktop file index and the icon theme, and this is
-     * read on every UI sync, so the result is cached against the properties it
-     * was derived from. Both arrive asynchronously with the app proxy, so the
-     * key — not a "resolved once" flag — is what lets a better icon land later.
-     */
+    /* Resolution walks the desktop file index and icon theme, and runs on every
+     * sync, so it is cached against its inputs. Both arrive with the app proxy,
+     * so a key, not a "resolved once" flag, lets a better icon land later. */
     _resolveApp() {
         const key = JSON.stringify([this.desktopEntry, this.identity]);
         if (this._app?.key !== key) {
@@ -410,34 +380,32 @@ export const MprisPlayer = GObject.registerClass({
         return this._resolveApp().kind;
     }
 
-    /**
-     * The app's name as the desktop shows it, for anything the user reads.
-     * `identity` stays the raw MPRIS value, which the app lookup matches on.
-     */
+    /* The app's name as the desktop shows it. `identity` stays the raw MPRIS
+     * value, which the app lookup matches on. */
     get displayName() {
         return this._resolveApp().name ?? tidyIdentity(this.identity);
     }
 
-    /* Music players always, browsers never, anything else for local audio files. */
+    /* Music players always, browsers never, others for local audio files. */
     get playsMusic() {
         const kind = this.kind;
         return kind === PlayerKind.MUSIC ||
             (kind === PlayerKind.OTHER && isAudioFile(this.url));
     }
 
-    /** True when we found the player's real icon rather than a generic one. */
+    /* Whether a real app icon was found rather than a generic one. */
     get hasAppIcon() {
         return this._resolveApp().icon !== null;
     }
 
-    /** Best-effort app icon for this player; never null. */
+    /* Never null. */
     get appIcon() {
         this._genericIcon ??= Gio.ThemedIcon.new(GENERIC_ICON);
         return this._resolveApp().icon ?? this._genericIcon;
     }
 
-    /* Any of these can race with the player disappearing from the bus, so every
-     * call swallows its own error rather than taking down the shell. */
+    /* Every call can race the player leaving the bus, so errors are swallowed
+     * rather than taking down the shell. */
     _call(method) {
         if (!this._playerProxy)
             return;
@@ -491,10 +459,9 @@ export const MprisPlayer = GObject.registerClass({
         }
     }
 
-    /* Property assignment on a GJS proxy updates the cached value at once and
-     * issues the D-Bus Properties.Set call asynchronously, so a sync() right
-     * after the click already paints the new state; players that reject the
-     * write correct it with their next PropertiesChanged. */
+    /* Assigning a GJS proxy property updates the cache at once and sends Set
+     * asynchronously, so a sync right after already shows the new state; a
+     * player that rejects it corrects it with its next PropertiesChanged. */
     setLoopStatus(status) {
         if (!this._playerProxy || !this.canLoop)
             return;
@@ -535,13 +502,8 @@ export const MprisPlayer = GObject.registerClass({
         }
     }
 
-    /**
-     * The Position property is intentionally excluded from PropertiesChanged by
-     * the MPRIS spec, so a cached read would be stale. Always ask the bus.
-     *
-     * @returns {Promise<number|null>} position in microseconds, or null when
-     *   the player could not say
-     */
+    /* The spec excludes Position from PropertiesChanged, so the cached value
+     * is stale; always ask the bus. Resolves to µs, or null on failure. */
     getPosition() {
         return new Promise(resolve => {
             if (!this._playerProxy) {
@@ -564,12 +526,7 @@ export const MprisPlayer = GObject.registerClass({
         });
     }
 
-    /**
-     * Seek relative to the current position. Negative offsets rewind; the spec
-     * says players clamp to the start of the track themselves.
-     *
-     * @param {number} offset in microseconds
-     */
+    /* Relative, in µs; players clamp to the start of the track themselves. */
     seek(offset) {
         if (!this._playerProxy || !this.canSeek)
             return;
@@ -580,17 +537,15 @@ export const MprisPlayer = GObject.registerClass({
         }
     }
 
-    /**
-     * @param {number} position absolute position in microseconds
-     */
+    /* Absolute, in µs. */
     setPosition(position) {
         if (!this._playerProxy || !this.canSeek)
             return;
 
         const warn = e => logError('seek failed', e);
 
-        /* SetPosition needs a valid object path. Players that report a bogus
-         * trackid (or none) get a relative Seek instead. */
+        /* SetPosition needs a valid object path; players with a bogus trackid
+         * get a relative Seek instead. */
         const trackId = this.trackId;
         if (trackId && trackId.startsWith('/')) {
             try {
@@ -601,8 +556,8 @@ export const MprisPlayer = GObject.registerClass({
             return;
         }
 
-        /* The Seek runs after a round trip, so a synchronous `try` around this
-         * call would already have returned by the time it could throw. */
+        /* The Seek runs after a round trip, so a synchronous `try` would have
+         * returned by the time it could throw. */
         this.getPosition()
             .then(current => {
                 if (current !== null)
@@ -630,10 +585,10 @@ export const MprisPlayer = GObject.registerClass({
 
 export const MprisManager = GObject.registerClass({
     Signals: {
-        /* Emitted when the active player, or anything about it, changes. */
+        /* The active player, or anything about it, changed. */
         'changed': {},
-        /* Emitted when the set of running players changes, or when one of them
-         * gains the identity or icon the switcher renders it with. */
+        /* Players came or went, or one gained the identity or icon the
+         * switcher shows. */
         'players-changed': {},
     },
 }, class MprisManager extends GObject.Object {
@@ -649,10 +604,9 @@ export const MprisManager = GObject.registerClass({
         this._loaded = false;
         this._cancellable = new Gio.Cancellable();
 
-        /* Set by the extension from the `pause-others-on-play` setting: when a
-         * player starts, whichever other player was playing is paused. Off
-         * until the extension says otherwise, so nothing touches the user's
-         * playback before the setting has been read. */
+        /* Pause other players when one starts. Set by the extension from the
+         * `pause-others-on-play` setting; off until then, so nothing is
+         * paused before the setting is read. */
         this.exclusivePlayback = false;
 
         const DBusProxy = Gio.DBusProxy.makeProxyWrapper(DBusIface);
@@ -677,29 +631,16 @@ export const MprisManager = GObject.registerClass({
         return [...this._players.values()];
     }
 
-    /**
-     * The players the UI can actually control and switch between, oldest first:
-     * the map is keyed by arrival, so this is the order they were opened in,
-     * and a switcher with room for only a few of them can drop the ones that
-     * have been sitting around longest. Players already running at startup are
-     * ordered by what the bus reports, which is the closest thing to an opening
-     * order available after the fact.
-     */
+    /* Controllable players, oldest first: the map is in arrival order, so a
+     * switcher short of room can drop the longest-idle ones. Players running
+     * at startup come in bus order, the closest thing available. */
     get readyPlayers() {
         return this.players.filter(player => player.ready);
     }
 
-    /**
-     * Show this player, whatever else is playing.
-     *
-     * The choice sticks against the noise — a player's metadata updates several
-     * times a second and none of that should move the card off what the user
-     * asked for — but not against intent: the moment any other player starts
-     * playing, _noteStatus() drops the pin and that player takes over. It is
-     * also dropped when the pinned player leaves the bus.
-     *
-     * @param {string} busName the player's MPRIS bus name
-     */
+    /* Show this player, whatever else is playing. The pin holds against
+     * metadata noise but not against intent: another player starting drops it
+     * (see _noteStatus()), as does the pinned player leaving the bus. */
     selectPlayer(busName) {
         const player = this._players.get(busName);
         if (!player)
@@ -726,8 +667,8 @@ export const MprisManager = GObject.registerClass({
     }
 
     _loadExistingPlayers() {
-        /* The result must not be destructured in the parameter list: it is null
-         * on error (including cancellation on destroy). */
+        /* Not destructured in the parameter list: result is null on error,
+         * including cancellation on destroy. */
         this._dbusProxy.ListNamesRemote((result, error) => {
             if (error)
                 return;
@@ -736,9 +677,8 @@ export const MprisManager = GObject.registerClass({
                 if (this._isPlayerName(name))
                     this._addPlayer(name);
             }
-            /* Everything from here on is a player that arrived while we were
-             * watching — the distinction _noteStatus() draws before pausing
-             * anything. */
+            /* From here on, a new player arrived while we were watching:
+             * _noteStatus() depends on the distinction. */
             this._loaded = true;
             this._selectActive();
         }, this._cancellable);
@@ -769,11 +709,10 @@ export const MprisManager = GObject.registerClass({
         const player = new MprisPlayer(busName);
         this._players.set(busName, player);
 
-        /* A player that was already on the bus when the extension started has
-         * no entry: _noteStatus() adopts whatever it is doing without treating
-         * it as having just started, so enabling the extension never pauses
-         * music that was already running. One that joins later starts from
-         * "not playing", so its first Playing counts as a start. */
+        /* A player already on the bus at startup gets no entry, so
+         * _noteStatus() adopts its state without treating it as a start, and
+         * enabling the extension never pauses music already running. One that
+         * joins later starts from Stopped, so its first Playing counts. */
         if (this._loaded)
             this._statuses.set(busName, 'Stopped');
 
@@ -784,9 +723,8 @@ export const MprisManager = GObject.registerClass({
             /* Emits 'changed' itself when the active player flips. */
             this._selectActive();
 
-            /* A background player updating its metadata is not news: only the
-             * player on screen forces a re-render, and only when _selectActive()
-             * has not already announced it. */
+            /* A background player's metadata is not news: only the player on
+             * screen re-renders, unless _selectActive() already announced it. */
             if (wasActive && this._active === player)
                 this.emit('changed');
 
@@ -797,15 +735,9 @@ export const MprisManager = GObject.registerClass({
         this._notifyRoster();
     }
 
-    /**
-     * Watch one player's PlaybackStatus for the moment it starts, which is the
-     * only thing exclusive playback acts on. Every other property change moves
-     * through here too, so it compares against the last status rather than
-     * asking "is it playing" — otherwise a track's position updates would keep
-     * re-pausing everything else.
-     *
-     * @param {object} player the MprisPlayer that just emitted 'changed'
-     */
+    /* Watch for the moment a player starts, the only thing exclusive playback
+     * acts on. Compares against the last status, since every property change
+     * comes through here and "is it playing" would keep re-pausing others. */
     _noteStatus(player) {
         const previous = this._statuses.get(player.busName);
         const status = player.status;
@@ -817,23 +749,17 @@ export const MprisManager = GObject.registerClass({
         if (status !== 'Playing')
             return;
 
-        /* Pressing play somewhere is the clearest statement there is about
-         * which player matters now, so it releases an earlier pick — otherwise
-         * the card would sit on a player the user chose minutes ago while the
-         * one they just started plays unseen, with no way back if the switcher
-         * has no room to show it. */
+        /* Pressing play elsewhere releases an earlier pick, or the card would
+         * sit on a player chosen minutes ago while the new one plays unseen. */
         if (this._pinned && this._pinned !== player.busName)
             this._pinned = null;
 
-        /* `undefined` is a player we are seeing for the first time and were not
-         * around to watch start; leave it, and everyone else, alone. */
+        /* `undefined`: seen for the first time, not watched starting; leave
+         * everyone alone. */
         if (previous !== undefined)
             this._pauseOthers(player);
     }
 
-    /**
-     * @param {object} player the player that just started, and is spared
-     */
     _pauseOthers(player) {
         if (!this.exclusivePlayback)
             return;
@@ -842,24 +768,19 @@ export const MprisManager = GObject.registerClass({
             if (other === player || !other.isPlaying)
                 continue;
 
-            /* Not recorded as Paused until the player says so. Browsers send
-             * other property changes before the status catches up, and each
-             * would then read as Playing-after-Paused — a fresh start, which
-             * would pause the player that was just started. Pausing twice is
-             * harmless: Pause on a paused player does nothing. */
+            /* Not recorded as Paused until the player says so: browsers send
+             * other changes before the status catches up, and each would read
+             * as a fresh start and pause the player just started. Pausing twice
+             * is harmless. */
             other.pause();
         }
     }
 
-    /**
-     * The switcher renders one button per player out of exactly these
-     * properties, so this is what "the roster changed" means. Players emit
-     * 'changed' several times a second while playing; comparing the signature
-     * keeps that from rebuilding a row of buttons that has not moved.
-     */
+    /* The switcher renders one button per player from exactly these
+     * properties. Comparing the signature keeps per-second 'changed' noise
+     * from rebuilding it. JSON, so a crafted identity cannot forge a field
+     * boundary. */
     _rosterSignature() {
-        /* JSON rather than a joined string: an identity is arbitrary text from
-         * the player, and could otherwise forge a field boundary. */
         return JSON.stringify(this.players.map(player =>
             [player.busName, player.ready, player.identity, player.desktopEntry]));
     }
@@ -885,16 +806,16 @@ export const MprisManager = GObject.registerClass({
         this._players.delete(busName);
         this._statuses.delete(busName);
 
-        /* `_active` is left pointing at the removed player on purpose:
+        /* `_active` deliberately still points at the removed player:
          * _selectActive() compares against it to decide whether to emit
-         * 'changed'. Clearing it here would swallow that signal, leaving the
-         * panel showing a player that has quit. */
+         * 'changed', and clearing it here would leave the panel showing a
+         * player that has quit. */
         player.destroy();
         this._notifyRoster();
     }
 
-    /* Scans the map in place; `players` would allocate a fresh array per call,
-     * and this runs on every property change of every player. */
+    /* Scans the map in place: `players` would allocate an array per call, and
+     * this runs on every property change of every player. */
     _find(predicate) {
         for (const player of this._players.values()) {
             if (predicate(player))
@@ -903,16 +824,14 @@ export const MprisManager = GObject.registerClass({
         return null;
     }
 
-    /**
-     * A player the user picked wins outright. Failing that, prefer whatever is
-     * actually playing, and otherwise keep the current player so the panel does
-     * not jump around when a background player updates metadata.
-     */
+    /* A pinned player wins outright. Otherwise prefer one that is playing, and
+     * else keep the current one so the panel does not jump around when a
+     * background player updates its metadata. */
     _selectActive() {
         const previous = this._active;
         const pinned = this._pinned ? this._players.get(this._pinned) : null;
 
-        /* The pinned player quit; fall back to choosing one automatically. */
+        /* The pinned player quit. */
         if (!pinned)
             this._pinned = null;
 

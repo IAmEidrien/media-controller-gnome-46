@@ -170,6 +170,7 @@ function fixture() {
         Slider: Actor,
         PanelMenu: {Button: PanelButton},
         PopupMenu: {PopupBaseMenuItem: Actor},
+        BackdropMaker: class {make() { return Promise.resolve(null); } destroy() {}},
         artCacheDir: () => ({
             enumerate_children_async: (...args) => args.at(-1)(
                 {enumerate_children_finish: () => { throw Error('empty cache'); }}, null),

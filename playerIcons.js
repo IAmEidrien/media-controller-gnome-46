@@ -1,40 +1,31 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-/* playerIcons.js
- *
- * Resolves the icon of the application that is playing, and what kind of app
- * it is. A browser shows the browser's own icon, whatever site is in the tab.
+/* playerIcons.js: resolves the playing app's icon, name and kind. A browser
+ * shows its own icon, whatever site is in the tab.
  *
  * MPRIS players are unreliable about naming themselves: Spotify's Flatpak
  * reports `DesktopEntry=spotify` while its desktop file is
- * `com.spotify.Client.desktop`, Google Chrome reports no DesktopEntry at all
- * and owns the bus name `org.mpris.MediaPlayer2.chromium`. So each hint the
- * player gives us is tried in turn, and each is looked up three ways before
- * moving on to the next.
- */
+ * `com.spotify.Client.desktop`, and Google Chrome reports no DesktopEntry and
+ * owns the bus name `org.mpris.MediaPlayer2.chromium`. So each hint is tried
+ * in turn, each looked up three ways. */
 
 import Gio from 'gi://Gio';
 import GioUnix from 'gi://GioUnix';
 import St from 'gi://St';
 
-/** Desktop ids, icon names and identities disagree on case and punctuation. */
+/* Desktop ids, icon names and identities disagree on case and punctuation. */
 function normalize(text) {
     return text.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
-/* Identity is a display name, so a player calling itself something this broad
- * must not be fuzzy-matched against the desktop file index — "Music" alone
- * would happily pick the first music app on the system. Such a name is still
- * tried as an exact desktop id and icon name.
- *
- * Normalized on the way in so the comparison is against the same shape the
- * lookup uses: a DesktopEntry of "Music" and an Identity of "Media Player" both
- * have to land in here, and neither matches these words verbatim. */
+/* Names too broad to fuzzy-match against the desktop file index ("Music"
+ * would pick the first music app installed). They are still tried as exact
+ * desktop ids and icon names. */
 const GENERIC_NAMES = new Set([
     'music', 'media', 'player', 'media-player', 'audio', 'video', 'sound',
     'browser', 'web', 'stream', 'radio', 'podcast',
 ].map(normalize));
 
-/** "Google Chrome" -> "google-chrome" */
+/* "Google Chrome" -> "google-chrome" */
 function slugify(text) {
     return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
@@ -52,13 +43,9 @@ function themedIcon(iconTheme, name) {
     return iconTheme.has_icon(name) ? Gio.ThemedIcon.new(name) : null;
 }
 
-/**
- * Whether a desktop id names the app the player calls `name`, ignoring the
- * vendor prefix: `spotify` matches `com.spotify.Client`, and `chrome` matches
- * `com.google.Chrome`. Snap ids are `<snap>_<app>`, so `spotify` matches
- * `spotify_spotify` too. Only whole runs of segments count, so `foo` does not
- * match `io.gitlab.adhami3310.Footage`.
- */
+/* Whether a desktop id names the app, ignoring the vendor prefix: `spotify`
+ * matches `com.spotify.Client` and the snap id `spotify_spotify`. Only whole
+ * runs of segments count, so `foo` does not match `...Footage`. */
 function idNamesApp(id, wanted) {
     const segments = id.replace(/\.desktop$/, '').split(/[._]/).map(normalize);
     for (let start = 0; start < segments.length; start++) {
@@ -72,12 +59,9 @@ function idNamesApp(id, wanted) {
     return false;
 }
 
-/**
- * Find the desktop files whose id names the app, which is how a Flatpak's
- * reverse-DNS id is reached from the short name the player reports. The id
- * check is what keeps the search from wandering: GNOME's index also matches on
- * Name and Keywords, so a bare word would pull in half the menu.
- */
+/* Reaches a Flatpak's reverse-DNS id from the short name the player reports.
+ * GNOME's index also matches Name and Keywords, so the id check is what keeps
+ * a bare word from pulling in half the menu. */
 function* searchedApps(name) {
     const wanted = normalize(name);
     if (!wanted || GENERIC_NAMES.has(wanted))
@@ -103,25 +87,16 @@ function searchedIcon(name) {
     return null;
 }
 
-/**
- * @param {object} player
- * @param {string} player.busName bus name the player owns
- * @param {string} player.desktopEntry MPRIS DesktopEntry, often absent
- * @param {string} player.identity MPRIS Identity, a human-readable app name
- * @returns {string[]} the names the player might go by, best first
- */
+/* The names a player might go by, best first. */
 function candidateNames({busName, desktopEntry, identity}) {
-    /* `org.mpris.MediaPlayer2.chromium.instance1234` -> `chromium`, but
-     * `org.mpris.MediaPlayer2.io.bassi.Amberol` -> `io.bassi.Amberol`, which is
-     * already a desktop id. */
+    /* `org.mpris.MediaPlayer2.chromium.instance1234` -> `chromium`;
+     * `org.mpris.MediaPlayer2.io.bassi.Amberol` -> `io.bassi.Amberol`. */
     const busSlug = busName
         .replace(/^org\.mpris\.MediaPlayer2\./, '')
         .replace(/\.instance.*$/i, '');
 
-    /* Identity outranks the bus name because the bus name can belong to another
-     * project entirely: Google Chrome identifies as "Chrome" while owning
-     * `org.mpris.MediaPlayer2.chromium`, and would otherwise wear Chromium's
-     * icon on a machine that has both. */
+    /* Identity outranks the bus name, which can belong to another project:
+     * Chrome owns `...chromium` and would otherwise wear Chromium's icon. */
     return [desktopEntry, slugify(identity ?? ''), busSlug].filter(Boolean);
 }
 
@@ -134,10 +109,7 @@ function findApp(player) {
     return null;
 }
 
-/**
- * @param {object} player the hints candidateNames() takes
- * @returns {Gio.Icon | null} null when nothing better than a generic icon exists
- */
+/* null when nothing better than a generic icon exists. */
 export function resolvePlayerIcon(player) {
     const iconTheme = new St.IconTheme();
     for (const name of candidateNames(player)) {
@@ -156,32 +128,16 @@ export const PlayerKind = Object.freeze({
     OTHER: 'other',
 });
 
-/**
- * What the desktop knows about the player's app, from the same desktop file the
- * icon came from.
- *
- * The name is the one the app goes by in the app grid, the dash and the window
- * switcher, and it beats the player's own Identity, which some builds get
- * badly wrong: Firefox puts its vendor in front of its internal app name, and
- * Fedora's build sets that to its desktop id — "Mozilla org.mozilla.firefox".
- *
- * @param {object} player the hints candidateNames() takes
- * @returns {{kind: string, name: string|null}} a PlayerKind, and the app's
- *   name, or null when no desktop file was found
- */
+/* The app's kind and its name as the desktop shows it (null without a desktop
+ * file). That name beats the player's Identity, which some builds get wrong:
+ * Fedora's Firefox reports "Mozilla org.mozilla.firefox". */
 export function resolvePlayerApp(player) {
     const app = findApp(player);
     return {kind: kindOf(app), name: app?.get_name() || null};
 }
 
-/**
- * Classify a player by its desktop file's categories. A browser can be playing
- * anything, and an app declaring Video plays films too, whatever else it
- * declares.
- *
- * @param {object|null} app the player's GioUnix.DesktopAppInfo
- * @returns {string} a PlayerKind
- */
+/* A browser can be playing anything, and an app declaring Video plays films
+ * too, whatever else it declares. */
 function kindOf(app) {
     const categories = new Set(app?.get_categories()?.split(';'));
     if (categories.has('WebBrowser'))

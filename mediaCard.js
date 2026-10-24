@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-/* mediaCard.js
- *
- * The iOS-style "now playing" card shown when the panel indicator is clicked.
- */
+/* mediaCard.js: the iOS-style "now playing" card shown when the panel
+ * indicator is clicked. */
 
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
@@ -14,6 +12,7 @@ import { gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.j
 import { Slider } from 'resource:///org/gnome/shell/ui/slider.js';
 
 import { cssUrl } from './artCache.js';
+import { BackdropMaker } from './backdrop.js';
 import { boxOrientation } from './compat.js';
 import { Equalizer } from './equalizer.js';
 import { LyricsPanel, lyricsIcon } from './lyricsPanel.js';
@@ -25,24 +24,23 @@ import {
 
 const POSITION_POLL_SECONDS = 1;
 
-/* A wrapping title has no natural bound: the card is as tall as the text needs.
- * Podcast episodes and DJ sets routinely carry titles of a few hundred
- * characters, which would push the controls off the bottom of the screen. This
- * caps the title at roughly three lines at the default card width; the wrap
- * still does the real work, this only stops the pathological case. */
+/* The title wraps, so the card is as tall as the text needs. Podcast and DJ-set
+ * titles can run to hundreds of characters and push the controls off screen;
+ * this caps them at roughly three lines. */
 const MAX_TITLE_CHARS = 120;
 
-/* The player list rises out of the player button: this much air between the
- * two, at least this much between the list and the card's edges, and this far
- * it slides in from. */
+/* The player list rises out of the player button: gap above the button, inset
+ * from the card's edges, and how far it slides in. */
 const LIST_GAP = 6;
 const LIST_INSET = 10;
 const LIST_SLIDE = 12;
 const LIST_MS = 180;
 
-/* Keyed by the `card-art-size` enum nick. `icon` sizes the fallback player icon
- * so it keeps roughly the same inset as the artwork it stands in for, and the
- * radius tracks the size so the corners stay proportionally round. */
+/* One track's backdrop fading into the next. */
+const BACKDROP_MS = 500;
+
+/* Keyed by the `card-art-size` nick. `icon` keeps the fallback icon's inset
+ * close to the artwork's; the radius scales with the size. */
 const ART_SIZES = {
     'small': {size: 80, radius: 14, icon: 36},
     'medium': {size: 104, radius: 18, icon: 46},
@@ -50,12 +48,12 @@ const ART_SIZES = {
 };
 const DEFAULT_ART_SIZE = 'large';
 
-/* How long the volume slider stops following the player after the user moves
- * it. Every write comes back as a PropertiesChanged a moment later, and those
- * echoes, replayed mid-drag, would pull the thumb back to where it just was. */
+/* How long the volume slider ignores the player after the user moves it: each
+ * write echoes back as PropertiesChanged, which would pull the thumb back
+ * mid-drag. */
 const VOLUME_HOLD_MS = 400;
 
-/* The shell's own volume slider's thresholds: muted only at zero, then thirds. */
+/* The shell's own volume thresholds: muted only at zero, then thirds. */
 const VOLUME_ICONS = [
     'audio-volume-muted-symbolic',
     'audio-volume-low-symbolic',
@@ -63,19 +61,15 @@ const VOLUME_ICONS = [
     'audio-volume-high-symbolic',
 ];
 
-/** @param {number} volume 0 to 1, or past it on players that amplify */
+/* volume is 0 to 1, or past it on players that amplify. */
 function volumeIconName(volume) {
     if (volume <= 0)
         return VOLUME_ICONS[0];
     return VOLUME_ICONS[Math.min(3, Math.ceil(volume * 3))];
 }
 
-/**
- * Spreading the string iterates code points, so the cut never lands between the
- * halves of a surrogate pair and split an emoji into a broken glyph.
- *
- * @param {string} text @param {number} maxLength
- */
+/* Spreading iterates code points, so the cut never splits a surrogate pair
+ * (an emoji) in half. */
 function truncate(text, maxLength) {
     const chars = [...text];
     if (chars.length <= maxLength)
@@ -83,7 +77,7 @@ function truncate(text, maxLength) {
     return `${chars.slice(0, maxLength - 1).join('').trimEnd()}…`;
 }
 
-/** Hours only appear once there are some: `4:07`, but `1:23:20`. */
+/* `4:07`, or `1:23:20` once there are hours. */
 function formatTime(micros) {
     const total = Math.max(0, Math.floor(micros / US_PER_SECOND));
     const seconds = total % 60;
@@ -96,12 +90,12 @@ function formatTime(micros) {
     return `${minutes}:${pad(seconds)}`;
 }
 
-/* Secondary text; opacity keeps it legible in both light and dark themes,
- * which a hardcoded color would not. */
+/* Secondary text is dimmed by opacity, which stays legible in light and dark
+ * themes where a fixed color would not. */
 const DIM_OPACITY = 160;
 
 /* `message-media-control` is the shell's own media button style, so hover,
- * active and insensitive states follow the current theme. */
+ * active and insensitive states follow the theme. */
 function iconButton(iconName, styleClass) {
     return new St.Button({
         style_class: `message-media-control ${styleClass}`,
@@ -123,18 +117,12 @@ function pop(actor) {
 }
 
 /* The layer the player list floats in. It asks for no room, so the list can
- * never hold the card open: as the list faded out over a card whose lyrics
- * were closing — switching to a browser, say — the card used to stay at its
- * old height, centring the header in it, and then snap shut. And it seats the
- * list on every allocation, so the list rides the player button wherever the
- * card's height moves it. */
+ * never hold the card open (it once kept a closing card at its old height),
+ * and it seats the list on every allocation, so the list follows the player
+ * button wherever the card's height moves it. anchor() returns the y of the
+ * list's bottom edge, in the layer's coordinates. */
 const ListLayer = GObject.registerClass(
 class ListLayer extends St.Widget {
-    /**
-     * @param {object} list the PlayerList
-     * @param {Function} anchor returns the y, in the layer's coordinates, that
-     *   the list's bottom edge sits on
-     */
     _init(list, anchor) {
         super._init({x_expand: true, y_expand: true, visible: false});
         this._list = list;
@@ -165,26 +153,28 @@ class ListLayer extends St.Widget {
 
 export const MediaCard = GObject.registerClass({
     Signals: {
-        /* Raised the player's window; the menu should close. */
+        /* The player's window was raised; the menu should close. */
         'activated': {},
-        /* The gear button was pressed. */
         'open-preferences': {},
-        /* A player was picked from the list; carries its MPRIS bus name. */
+        /* Carries the picked player's MPRIS bus name. */
         'player-selected': {param_types: [GObject.TYPE_STRING]},
+        /* Carries the backdrop's edge color as CSS, or '' for the plain card. */
+        'backdrop-changed': {param_types: [GObject.TYPE_STRING]},
     },
 }, class MediaCard extends St.Widget {
     _init(artCache, lyricsSource, settings) {
-        /* Two layers: the card's content, and above it the player list with
-         * the scrim behind it, which float over the content when open. */
+        /* Three layers: the album-art backdrop, the content over it, and on
+         * top the player list and its scrim, floating over the content. */
         super._init({
             style_class: 'mc-card',
             layout_manager: new Clutter.BinLayout(),
             x_expand: true,
         });
 
-        /* Held to the top at its own height. Filling a card that is briefly
-         * taller than it would stretch the header, whose action column
-         * expands, and slide the artwork down to the middle. */
+        this._buildBackdrop();
+
+        /* Held to the top at its own height: stretched, the header's expanding
+         * action column would grow and the artwork slide to the middle. */
         this._content = new St.BoxLayout({
             style_class: 'mc-card-content',
             ...boxOrientation(Clutter.Orientation.VERTICAL),
@@ -210,6 +200,9 @@ export const MediaCard = GObject.registerClass({
         this._artGeneration = 0;
         this._artPath = null;
         this._artSize = ART_SIZES[DEFAULT_ART_SIZE];
+        this._backdropMaker = new BackdropMaker();
+        this._backdropGeneration = 0;
+        this._backdropPath = null;
         this._length = 0;
         this._position = 0;
         this._players = [];
@@ -237,6 +230,8 @@ export const MediaCard = GObject.registerClass({
             this._settings.connect('changed::card-width', () => this._applyWidth()),
             this._settings.connect('changed::lyrics-height', () => this._applyLyricsHeight()),
             this._settings.connect('changed::card-art-size', () => this._applyArtSize()),
+            this._settings.connect('changed::card-art-backdrop',
+                () => this._onBackdropSettingChanged()),
         ];
         this._applyWidth();
         this._applyArtSize();
@@ -244,13 +239,101 @@ export const MediaCard = GObject.registerClass({
         this.connect('destroy', () => this._onDestroy());
     }
 
-    /**
-     * Hand the card the players it can switch between. Called on every sync, so
-     * it does as little as possible when nothing has moved.
-     *
-     * @param {object[]} players the players to offer, in a stable order
-     * @param {object|null} active the one currently on screen
-     */
+    /* Two image layers, so a new track's backdrop fades in over the last, and
+     * a sheen over both. None asks for room: the content alone sizes the card. */
+    _buildBackdrop() {
+        this._backdropLayers = [0, 1].map(() => new St.Widget({
+            style_class: 'mc-card-backdrop',
+            x_expand: true,
+            y_expand: true,
+        }));
+        this._sheen = new St.Widget({
+            style_class: 'mc-card-sheen',
+            x_expand: true,
+            y_expand: true,
+        });
+
+        for (const layer of [...this._backdropLayers, this._sheen])
+            this.add_child(layer);
+    }
+
+    /* With the artwork hidden it was never fetched, so the track's art is
+     * asked for again. */
+    _onBackdropSettingChanged() {
+        if (this._artPath || !this._settings.get_boolean('card-art-backdrop')) {
+            this._updateBackdrop();
+            return;
+        }
+        this._currentArtUrl = null;
+        this.sync();
+    }
+
+    /* With no art yet the last backdrop stays up: the art may be on its way,
+     * and the paths that know there is none drop it themselves. */
+    _updateBackdrop() {
+        if (!this._settings.get_boolean('card-art-backdrop')) {
+            this._dropBackdrop();
+            return;
+        }
+        if (!this._artPath)
+            return;
+
+        /* A newer track must win even if its backdrop is done first. */
+        const generation = ++this._backdropGeneration;
+        this._backdropMaker.make(this._artPath).then(backdrop => {
+            if (generation === this._backdropGeneration)
+                this._showBackdrop(backdrop);
+        });
+    }
+
+    _dropBackdrop() {
+        this._backdropGeneration++;
+        this._showBackdrop(null);
+    }
+
+    /* Fade to a new backdrop ({path, color} from BackdropMaker.make()), or
+     * away to the plain card for null. */
+    _showBackdrop(backdrop) {
+        const path = backdrop?.path ?? null;
+        if (path === this._backdropPath)
+            return;
+        this._backdropPath = path;
+
+        /* A new image always arrives on the upper layer; the one on screen
+         * moves underneath first, so the fade starts from it. Removing a
+         * transition skips its onComplete, so a fade cut short cannot clear a
+         * layer it no longer owns. */
+        const [lower, upper] = this._backdropLayers;
+        lower.remove_all_transitions();
+        upper.remove_all_transitions();
+        if (upper.style) {
+            lower.style = upper.style;
+            lower.opacity = 255;
+        }
+
+        const style = path ? `background-image: ${cssUrl(path)};` : null;
+        upper.style = style;
+        upper.opacity = 0;
+
+        const fade = {
+            duration: BACKDROP_MS,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            onComplete: () => {
+                lower.style = null;
+            },
+        };
+        if (path)
+            upper.ease({opacity: 255, ...fade});
+        else
+            lower.ease({opacity: 0, ...fade});
+
+        /* The list is a sheet of the same glass. */
+        this._playerList.style = style;
+        this.emit('backdrop-changed', backdrop?.color ?? '');
+    }
+
+    /* The players to offer, in a stable order, and the one on screen. Called
+     * on every sync. */
     setPlayers(players, active) {
         this._players = players;
         this._activePlayer = active;
@@ -258,9 +341,8 @@ export const MediaCard = GObject.registerClass({
         this._updatePicker();
     }
 
-    /* The button names the player on screen whenever there is one. Only with a
-     * second player is there a choice to make; until then it is a plain name
-     * tag, with no arrow and nothing to press. */
+    /* The button names the player on screen. Only with a second player is there
+     * a choice; until then it is a plain name tag with no arrow. */
     _updatePicker() {
         const player = this._activePlayer;
         const show = !!player && this._settings.get_boolean('card-show-player-switcher');
@@ -286,10 +368,8 @@ export const MediaCard = GObject.registerClass({
             ...boxOrientation(Clutter.Orientation.HORIZONTAL),
         });
 
-        /* The artwork is the card's "go to the app" target: clicking it raises
-         * the player's window. A button rather than a bin, so hover and focus
-         * come from the theme — St.Button is itself a St.Bin, so it still takes
-         * the fallback icon as its child and the sizing style as its own. */
+        /* Clicking the artwork raises the player's window. A button (itself an
+         * St.Bin) so hover and focus come from the theme. */
         this._artButton = new St.Button({
             style_class: 'mc-art',
             y_align: Clutter.ActorAlign.CENTER,
@@ -323,9 +403,8 @@ export const MediaCard = GObject.registerClass({
         this._titleLabel = new St.Label({style_class: 'mc-card-title', text: _('Nothing playing')});
         this._artistLabel = new St.Label({style_class: 'mc-card-artist', text: ''});
         this._albumLabel = new St.Label({style_class: 'mc-card-album', text: ''});
-        /* The card has a fixed width, so a long title wraps onto further lines
-         * rather than being cut off. Breaking mid-word is the fallback for a
-         * single word too long to fit on a line of its own. */
+        /* The card has a fixed width, so a long title wraps; mid-word breaks
+         * are the fallback for a word too long for a line. */
         this._titleLabel.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
         this._titleLabel.clutter_text.line_wrap = true;
         this._titleLabel.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
@@ -336,10 +415,9 @@ export const MediaCard = GObject.registerClass({
         textBox.add_child(this._albumLabel);
         header.add_child(textBox);
 
-        /* A full-height column down the right edge: the lyrics button and the
-         * gear on the top line, and the equalizer centred against the art. The
-         * track text is a column of its own beside this one, so it never runs
-         * underneath either of them. */
+        /* A full-height column on the right: lyrics button and gear on top, the
+         * equalizer centred against the art. The track text is its own column,
+         * so it never runs underneath them. */
         const actions = new St.BoxLayout({
             style_class: 'mc-card-actions',
             ...boxOrientation(Clutter.Orientation.VERTICAL),
@@ -371,8 +449,6 @@ export const MediaCard = GObject.registerClass({
             this._onLyricsTimingChanged();
         });
 
-        /* The top of the column: the lyrics button, then the gear in the
-         * corner. */
         const topRow = new St.BoxLayout({
             style_class: 'mc-card-actions-top',
             ...boxOrientation(Clutter.Orientation.HORIZONTAL),
@@ -398,9 +474,8 @@ export const MediaCard = GObject.registerClass({
 
         header.add_child(actions);
 
-        /* The lyrics open under the header in a column with no spacing: the
-         * gap above them is their own padding, so it grows with them instead
-         * of appearing all at once. */
+        /* No spacing in this column: the gap above the lyrics is their own
+         * padding, so it grows with them instead of appearing at once. */
         this._headerColumn = new St.BoxLayout({
             ...boxOrientation(Clutter.Orientation.VERTICAL),
         });
@@ -435,9 +510,8 @@ export const MediaCard = GObject.registerClass({
         this._slider.add_style_class_name('mc-seek');
         this._slider.x_expand = true;
 
-        /* The track can advance while the thumb is held, and sync() would move
-         * `_length` out from under the drag. Pin the player and the duration the
-         * user is actually scrubbing against. */
+        /* The track can change mid-drag and sync() would move `_length`, so
+         * the player and length being scrubbed are pinned. */
         this._slider.connect('drag-begin', () => {
             this._dragging = true;
             this._dragPlayer = this._player;
@@ -454,7 +528,7 @@ export const MediaCard = GObject.registerClass({
                 player.setPosition(Math.round(this._slider.value * length));
             return Clutter.EVENT_PROPAGATE;
         });
-        /* Keep the timestamps under the thumb while the user scrubs. */
+        /* Keep the timestamps under the thumb while scrubbing. */
         this._slider.connect('notify::value', () => {
             if (this._dragging && this._dragLength > 0) {
                 this._updateTimeLabels(this._slider.value * this._dragLength,
@@ -485,11 +559,9 @@ export const MediaCard = GObject.registerClass({
     }
 
     _buildControls() {
-        /* A box, not a BinLayout stack: shuffle packs against the left edge,
-         * loop against the right, and the expanding transport cluster centres
-         * itself in the space between them. (A BinLayout overlay does not
-         * apply the edge buttons' alignment and piles them onto the middle of
-         * the row, underneath the play button.) */
+        /* A box, not a BinLayout: shuffle packs left, loop right, and the
+         * expanding transport cluster centres between them. A BinLayout ignores
+         * the edge buttons' alignment and piles them under the play button. */
         const row = new St.BoxLayout({
             style_class: 'mc-controls-row',
             ...boxOrientation(Clutter.Orientation.HORIZONTAL),
@@ -537,8 +609,7 @@ export const MediaCard = GObject.registerClass({
         this._content.add_child(row);
     }
 
-    /* The bottom line of the card, under a hairline: which player this is —
-     * and, with more than one running, the way to switch — beside its volume. */
+    /* The bottom line, under a hairline: the player picker beside its volume. */
     _buildFooter() {
         this._footer = new St.BoxLayout({
             style_class: 'mc-card-footer',
@@ -562,8 +633,7 @@ export const MediaCard = GObject.registerClass({
         });
         this._pickerLabel.clutter_text.ellipsize = Pango.EllipsizeMode.END;
 
-        /* Points the way the list opens — up, since the card ends just below —
-         * and turns over while it is open. */
+        /* Points up, the way the list opens, and turns over while it is open. */
         this._pickerArrow = new St.Icon({
             style_class: 'mc-player-picker-arrow',
             icon_name: 'pan-up-symbolic',
@@ -591,8 +661,8 @@ export const MediaCard = GObject.registerClass({
                 this._closePlayerList();
                 return;
             }
-            /* Opened from the keyboard, the keyboard goes into the list; opened
-             * with the pointer, no row should light up as if focused. */
+            /* From the keyboard, focus goes into the list; with the pointer, no
+             * row should light up as if focused. */
             const type = Clutter.get_current_event()?.type();
             this._openPlayerList(type === Clutter.EventType.KEY_PRESS ||
                 type === Clutter.EventType.KEY_RELEASE);
@@ -603,11 +673,11 @@ export const MediaCard = GObject.registerClass({
         this._footer.visible = this._pickerButton.visible || this._volumeBox.visible;
     }
 
-    /* Over the card rather than in it: the list floats above the controls, so
-     * opening it never makes the card taller, nor pushes it off the screen. */
+    /* The list floats over the card, so opening it never makes the card taller
+     * or pushes it off screen. */
     _buildPlayerList() {
-        /* Dims the card behind the list and takes the click that dismisses it,
-         * so that click does not also land on a control underneath. */
+        /* Dims the card and takes the dismissing click, so it does not also
+         * land on a control underneath. */
         this._scrim = new St.Button({
             style_class: 'mc-card-scrim',
             x_expand: true,
@@ -625,18 +695,17 @@ export const MediaCard = GObject.registerClass({
         });
         this._playerList.connect('close-requested', () => this._closePlayerList());
 
-        /* Not placed through margins, which St resets from the stylesheet on
-         * every style change. The layer is not reactive, so a click beside the
-         * list goes through to the scrim. */
+        /* Placed by the layer, not margins, which St resets from the stylesheet
+         * on every style change. The layer is not reactive, so a click beside
+         * the list reaches the scrim. */
         this._listLayer = new ListLayer(this._playerList, () => this._pickerTop());
 
         this.add_child(this._scrim);
         this.add_child(this._listLayer);
     }
 
-    /* The top of the player button, in the card's coordinates. Read from the
-     * allocations, which are current by the time the list's layer asks: the
-     * card lays out its content first. */
+    /* The player button's top, in card coordinates. The content is allocated
+     * before the list layer asks, so the allocations are current. */
     _pickerTop() {
         let y = 0;
         for (let actor = this._pickerButton; actor && actor !== this; actor = actor.get_parent())
@@ -644,7 +713,6 @@ export const MediaCard = GObject.registerClass({
         return y;
     }
 
-    /** @param {boolean} byKeyboard whether to put the focus on the first row */
     _openPlayerList(byKeyboard) {
         if (this._playerListOpen)
             return;
@@ -683,14 +751,13 @@ export const MediaCard = GObject.registerClass({
             list.grab_key_focus();
     }
 
-    /** @param {boolean} animate false when the card itself is going away */
+    /* animate is false when the card itself is going away. */
     _closePlayerList(animate = true) {
         if (!this._playerListOpen)
             return;
         this._playerListOpen = false;
 
-        /* The keyboard goes back where it was, rather than staying in a list
-         * that is about to be hidden. */
+        /* Focus goes back where it was, not left in a list about to hide. */
         const focus = global.stage.key_focus;
         if (focus && this._playerList.contains(focus))
             (this._focusBeforeList ?? this._pickerButton).grab_key_focus();
@@ -717,8 +784,8 @@ export const MediaCard = GObject.registerClass({
         });
     }
 
-    /* The player's own volume, not the system's. MPRIS announces Volume in
-     * PropertiesChanged, so unlike the seek bar this needs no polling. */
+    /* The player's own volume, not the system's. Volume is announced in
+     * PropertiesChanged, so unlike the seek bar it needs no polling. */
     _buildVolume() {
         this._volumeBox = new St.BoxLayout({
             style_class: 'mc-volume-box',
@@ -738,8 +805,8 @@ export const MediaCard = GObject.registerClass({
         this._volumeSlider.accessible_name = _('Volume');
 
         /* Drags, scrolls, clicks and arrow keys all land here. Blocked while
-         * _syncVolume() moves the slider, so the player's own value is not
-         * written straight back to it. */
+         * _syncVolume() moves the slider, so the player's value is not written
+         * straight back. */
         this._volumeChangedId = this._volumeSlider.connect('notify::value', () => {
             const volume = this._volumeSlider.value;
             this._player?.setVolume(volume);
@@ -751,9 +818,8 @@ export const MediaCard = GObject.registerClass({
         this._volumeBox.add_child(this._volumeSlider);
     }
 
-    /* Leave the slider where the user put it until the writes have echoed
-     * back, then take the player's word for it — which also puts the slider
-     * right if the player clamped or refused the change. */
+    /* Keep the user's value until the writes have echoed back, then take the
+     * player's, which also corrects a clamped or refused change. */
     _holdVolume() {
         if (this._volumeHoldId)
             GLib.Source.remove(this._volumeHoldId);
@@ -789,16 +855,12 @@ export const MediaCard = GObject.registerClass({
         this.sync();
     }
 
-    /**
-     * @param {number} direction -1 to rewind, 1 to skip ahead
-     */
     _skip(direction) {
         if (!this._player)
             return;
         this._player.seek(seekOffset(this._settings, direction));
 
-        /* Players that do not emit Seeked would otherwise leave the slider
-         * stale until the next poll — and there is no poll while paused. */
+        /* For players that do not emit Seeked; there is no poll while paused. */
         this._refreshPositionSoon();
     }
 
@@ -816,14 +878,14 @@ export const MediaCard = GObject.registerClass({
         this.style = `width: ${this._settings.get_int('card-width')}px;`;
     }
 
-    /** @param {number} height the most the card may take up, in stage pixels */
+    /* height is the most the card may take, in stage pixels. */
     setMaxHeight(height) {
         this._maxHeight = height;
         this._applyLyricsHeight();
     }
 
-    /* The lyrics are as tall as the setting asks, short of running the card
-     * off the screen: they get whatever room the rest of the card leaves. */
+    /* The lyrics get the setting's height, short of running the card off
+     * screen: whatever room the rest of the card leaves. */
     _applyLyricsHeight() {
         const [, card] = this.get_preferred_height(this.width);
         const [, lyrics] = this._lyrics.visible ? this._lyrics.get_preferred_height(-1) : [0, 0];
@@ -831,8 +893,8 @@ export const MediaCard = GObject.registerClass({
             this._maxHeight - (card - lyrics));
     }
 
-    /* The art bin's geometry and its background-image share one `style`
-     * property, so both are written together rather than clobbering each other. */
+    /* Size and background-image share one `style` property, so they are always
+     * written together. */
     _applyArtSize() {
         const nick = this._settings.get_string('card-art-size');
         this._artSize = ART_SIZES[nick] ?? ART_SIZES[DEFAULT_ART_SIZE];
@@ -854,6 +916,9 @@ export const MediaCard = GObject.registerClass({
             this._artButton.set_style(style);
     }
 
+    /* Called on every change of the player on screen, which keeps the card
+     * current; the card does not also listen for the player's 'changed', which
+     * would render each change twice. */
     setPlayer(player) {
         if (this._player === player) {
             this.sync();
@@ -864,7 +929,6 @@ export const MediaCard = GObject.registerClass({
         this._player = player;
 
         if (player) {
-            this._playerSignals.push(player.connect('changed', () => this.sync()));
             this._playerSignals.push(player.connect('seeked', (_p, position) => {
                 this._position = position;
                 this._updateSlider();
@@ -885,7 +949,7 @@ export const MediaCard = GObject.registerClass({
         this._playerSignals = [];
     }
 
-    /** The card only polls Position while it is actually on screen. */
+    /* Whether the card is on screen; animations and polling run only then. */
     setActive(active) {
         this._active = active;
         /* The card opens as it was left, apart from the list. */
@@ -898,8 +962,8 @@ export const MediaCard = GObject.registerClass({
             this._refreshPosition();
     }
 
-    /* Polling exists to move the seek bar and timed lyrics. With neither on
-     * screen, no polling — every tick is a D-Bus round trip. */
+    /* Polling moves the seek bar and timed lyrics; with neither on screen there
+     * is none, since every tick is a D-Bus round trip. */
     _updateTimer() {
         const wanted = this._active && this._player?.isPlaying &&
             (this._seekBox.visible || this._lyrics.wantsPosition);
@@ -921,11 +985,9 @@ export const MediaCard = GObject.registerClass({
         if (!player)
             return;
         player.getPosition().then(position => {
-            /* The D-Bus round trip can outlive a drag starting, the player it
-             * was issued for, or the card itself (destroy nulls `_player`) — a
-             * late answer from the previous track would otherwise be painted
-             * onto this one's slider. A failed read keeps the last known
-             * position rather than snapping the slider and lyrics to 0. */
+            /* The round trip can outlive a drag starting, the player it was
+             * for, or the card (destroy nulls `_player`). A failed read keeps
+             * the last position rather than snapping to 0. */
             if (position === null || this._dragging || this._player !== player)
                 return;
             this._position = position;
@@ -949,7 +1011,7 @@ export const MediaCard = GObject.registerClass({
         this._remainingLabel.text = `-${formatTime(Math.max(0, length - position))}`;
     }
 
-    /** Drop any painted art and orphan whatever download is in flight. */
+    /* Drop any painted art and orphan the download in flight. */
     _clearArt() {
         this._artGeneration++;
         this._currentArtUrl = null;
@@ -961,8 +1023,8 @@ export const MediaCard = GObject.registerClass({
         this._artFallback.visible = true;
     }
 
-    /* A real app icon carries its own color and reads as artwork; only the
-     * generic symbolic placeholder wants dimming. */
+    /* A real app icon reads as artwork; only the generic placeholder is
+     * dimmed. */
     _setFallbackIcon(player) {
         this._artFallback.gicon = player.appIcon;
         this._artFallback.opacity = player.hasAppIcon ? 255 : DIM_OPACITY;
@@ -973,38 +1035,48 @@ export const MediaCard = GObject.registerClass({
         const showArt = this._settings.get_boolean('card-show-art');
         this._artButton.visible = showArt;
 
-        /* Forget the current art while hidden, so re-enabling the setting on the
-         * same track resolves it again instead of short-circuiting below. */
-        if (!showArt || !player) {
+        /* Forget the art while nothing uses it, so re-enabling a setting on the
+         * same track resolves it again. The backdrop needs the art even while
+         * the artwork itself is hidden. */
+        if (!(showArt || this._settings.get_boolean('card-art-backdrop')) || !player) {
             this._clearArt();
+            this._dropBackdrop();
             return;
         }
 
         const url = player.artUrl;
         if (url === this._currentArtUrl) {
-            /* The app proxy resolves after the player proxy, so a track with no
+            /* The app proxy lands after the player proxy, so a track with no
              * artwork can still gain a real icon on a later sync. */
             if (this._artFallback.visible)
                 this._setFallbackIcon(player);
             return;
         }
 
-        /* Art resolution is async; a newer track must win even if its download
-         * finishes first. */
+        /* A newer track must win even if its download finishes first. */
         this._clearArt();
         this._currentArtUrl = url;
         const generation = this._artGeneration;
         this._setFallbackIcon(player);
 
-        if (!url)
+        /* The last track's backdrop stays until the new art is in, rather than
+         * flashing the plain card; only a track known to have none drops it. */
+        if (!url) {
+            this._dropBackdrop();
             return;
+        }
 
         this._artCache.resolve(url).then(path => {
-            if (generation !== this._artGeneration || !path)
+            if (generation !== this._artGeneration)
                 return;
+            if (!path) {
+                this._dropBackdrop();
+                return;
+            }
             this._artPath = path;
             this._applyArtStyle();
             this._artFallback.visible = false;
+            this._updateBackdrop();
         });
     }
 
@@ -1063,14 +1135,13 @@ export const MediaCard = GObject.registerClass({
         this._seekBox.visible = showSeek;
         this._setSensitive(this._slider, player.canSeek);
 
-        /* Skipping needs Seek(); a player without it gets no skip buttons. */
+        /* Skip buttons need Seek(). */
         const showSkip = this._settings.get_boolean('card-show-seek-buttons') &&
             player.canSeek;
         this._backButton.visible = showSkip;
         this._forwardButton.visible = showSkip;
 
-        /* Shuffle and loop are optional MPRIS properties; a player that does
-         * not implement them gets no button, whatever the setting says. */
+        /* Shuffle and loop are optional in MPRIS: no support, no button. */
         this._shuffleButton.visible =
             this._settings.get_boolean('card-show-shuffle') && player.canShuffle;
         this._loopButton.visible =
@@ -1118,14 +1189,9 @@ export const MediaCard = GObject.registerClass({
         setReactive(actor, sensitive);
     }
 
-    /**
-     * The artwork only behaves like a button for a player that can actually be
-     * raised; for the rest it goes back to being a picture, with no hover cue
-     * and nothing to tab to.
-     *
-     * @param {boolean} raisable whether the player implements Raise
-     * @param {string} name names the target for screen readers
-     */
+    /* The artwork acts as a button only for a player that implements Raise;
+     * otherwise it is a picture, with no hover cue and nothing to tab to. name
+     * labels it for screen readers. */
     _setRaisable(raisable, name = '') {
         if (this._artButton.reactive !== raisable) {
             this._artButton.can_focus = raisable;
@@ -1138,9 +1204,11 @@ export const MediaCard = GObject.registerClass({
     }
 
     _onDestroy() {
-        /* Orphans any in-flight art download: its callback checks the
-         * generation and finds it stale. */
+        /* Orphans any in-flight art download or backdrop: their callbacks find
+         * the generation stale. */
         this._artGeneration++;
+        this._backdropGeneration++;
+        this._backdropMaker.destroy();
 
         if (this._timeoutId) {
             GLib.Source.remove(this._timeoutId);

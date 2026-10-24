@@ -166,19 +166,13 @@
     <key name="scroll-text" type="b">
       <default>true</default>
       <summary>Scroll panel text that does not fit</summary>
-      <description>Text wider than panel-text-width loops past it instead of being truncated.</description>
+      <description>Text wider than panel-text-width scrolls past it once for each new track, then rests truncated with an ellipsis.</description>
     </key>
 
     <key name="scroll-speed" type="i">
       <default>30</default>
       <range min="10" max="120"/>
       <summary>Scrolling speed in pixels per second</summary>
-    </key>
-
-    <key name="scroll-loop" type="b">
-      <default>false</default>
-      <summary>Keep scrolling the panel text</summary>
-      <description>When false the text scrolls once per track and then rests, truncated with an ellipsis.</description>
     </key>
 
     <key name="scroll-direction"
@@ -207,6 +201,12 @@
       <default>'large'</default>
       <summary>How large the album art is drawn in the card</summary>
       <description>Only has an effect while card-show-art is set. The fallback player icon scales to match.</description>
+    </key>
+
+    <key name="card-art-backdrop" type="b">
+      <default>true</default>
+      <summary>Fill the card with a frosted backdrop made from the album art</summary>
+      <description>The artwork is blurred into fields of color behind the card's text and controls, and darkened beneath them. The card stays dark glass in both the light and the dark style. Tracks without artwork keep the plain card. Works whether or not card-show-art is set.</description>
     </key>
 
     <key name="pause-others-on-play" type="b">

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-/* prefs.js */
+/* prefs.js: the preferences window. Runs in its own process, not the shell. */
 
 import Adw from 'gi://Adw';
 import Gio from 'gi://Gio';
@@ -12,7 +12,7 @@ import {ExtensionPreferences, gettext as _} from
 import {artCacheDir} from './paths.js';
 import {CLICK_ACTIONS} from './panelActions.js';
 
-/* Enumerating in batches keeps a large cache off the main loop in one gulp. */
+/* Batches keep a large cache from blocking the main loop. */
 const ENUMERATE_BATCH = 64;
 
 /* Index order must match the enum nicks in the GSettings schema. */
@@ -20,8 +20,8 @@ const POSITIONS = ['far-left', 'left', 'center', 'right', 'far-right'];
 const DIRECTIONS = ['left-to-right', 'right-to-left'];
 const ART_SIZES = ['small', 'medium', 'large'];
 
-/* Must be a function, not a top-level constant: gettext resolves the calling
- * extension from the stack, and at module scope no extension is registered yet. */
+/* Functions, not constants: gettext finds the extension from the call stack,
+ * and none is registered yet at module scope. */
 function positionLabels() {
     return [
         _('Far left'),
@@ -73,14 +73,14 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
         return row;
     }
 
-    /* Adw.ComboRow has no GSettings binding for enums, so the nick list and the
-     * row's index are kept in step by hand, in both directions. */
+    /* Adw.ComboRow cannot bind a GSettings enum, so nick and index are synced
+     * by hand both ways. */
     _comboRow(settings, key, title, nicks, labels) {
         const row = new Adw.ComboRow({title, model: Gtk.StringList.new(labels)});
         row.selected = Math.max(0, nicks.indexOf(settings.get_string(key)));
         row.connect('notify::selected', () =>
             settings.set_string(key, nicks[row.selected]));
-        /* Keep the row honest if the value changes elsewhere (e.g. dconf). */
+        /* Follow changes made elsewhere, e.g. in dconf. */
         settings.connect(`changed::${key}`, () => {
             const index = nicks.indexOf(settings.get_string(key));
             if (index >= 0 && index !== row.selected)
@@ -195,11 +195,7 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
         });
         scrolling.add(this._switchRow(settings, 'scroll-text',
             _('Scroll the text'),
-            _('When off, text that does not fit is shortened with an ellipsis.')));
-        scrolling.add(this._bindSensitive(settings, 'scroll-text',
-            this._switchRow(settings, 'scroll-loop',
-                _('Repeat'),
-                _('Scroll continuously. When off, the text scrolls once for each new track.'))));
+            _('Scrolls once for each new track. When off, text that does not fit is shortened with an ellipsis.')));
         scrolling.add(this._bindSensitive(settings, 'scroll-text',
             this._comboRow(settings, 'scroll-direction', _('Direction'),
                 DIRECTIONS, directionLabels())));
@@ -227,6 +223,9 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
         appearance.add(this._bindSensitive(settings, 'card-show-art',
             this._comboRow(settings, 'card-art-size', _('Album art size'),
                 ART_SIZES, artSizeLabels())));
+        appearance.add(this._switchRow(settings, 'card-art-backdrop',
+            _('Colors from album art'),
+            _('Fill the card with a dark frosted-glass backdrop blurred from the album art, in both the light and the dark style. When off, or for tracks without artwork, the card keeps its plain background.')));
         appearance.add(this._spinRow(settings, 'card-width',
             _('Card width'), _('Measured in pixels.'), 400, 560, 10));
         page.add(appearance);
@@ -355,14 +354,8 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
         });
     }
 
-    /**
-     * Walk the cache directory in batches, handing each Gio.FileInfo to `onInfo`.
-     * A missing directory is not an error: nothing has been cached yet.
-     *
-     * @param {string} attributes the Gio file attributes to request
-     * @param {Function} onInfo called per entry
-     * @param {Function} onDone called once, when the walk finishes
-     */
+    /* Calls onInfo per Gio.FileInfo, then onDone once. A missing directory
+     * just means nothing has been cached yet. */
     _walkCache(attributes, onInfo, onDone) {
         artCacheDir().enumerate_children_async(
             attributes, Gio.FileQueryInfoFlags.NONE, GLib.PRIORITY_DEFAULT, null,
@@ -434,8 +427,8 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
         this._walkCache(Gio.FILE_ATTRIBUTE_STANDARD_NAME,
             info => names.push(info.get_name()),
             () => {
-                /* The extension may be downloading into this directory right now,
-                 * so a file vanishing underneath us is expected, not an error. */
+                /* The extension may be writing here right now, so a file
+                 * vanishing underneath is expected. */
                 let outstanding = names.length;
                 if (outstanding === 0) {
                     this._refreshCacheStatus(status);
@@ -465,10 +458,9 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
         if (!ok)
             return;
 
-        /* Ask the schema rather than listing keys here, so a key added later is
-         * reset without anyone remembering to update this. The announced
-         * release is bookkeeping, not an option: resetting it would only
-         * repeat the what's-new notification. */
+        /* Keys come from the schema so new ones are covered. The announced
+         * release is bookkeeping; resetting it would repeat the what's-new
+         * notification. */
         for (const key of settings.settings_schema.list_keys()) {
             if (key !== 'last-announced-version')
                 settings.reset(key);

@@ -1,7 +1,7 @@
 # Media Controller: GNOME 46 public fork
 
 This is a compatibility and convenience fork of `naimur900/media-controller-gnome`,
-based on upstream `888b5e6428b8ab231eecbca4fedec875d9214081` (3.1). Preserve
+based on upstream `e292b37fbff0d4470e9b35bf5bc312b77bd77dfe` (3.3). Preserve
 upstream ancestry, copyright notices, and the GPL-2.0-or-later license.
 
 The target is Linux Mint 22 / GNOME Shell 46 on Wayland, with GLib 2.80 and
@@ -25,6 +25,8 @@ testing from syntax checks or mocked constructors.
   opt-in; keep stale-response guards, timer cleanup, and metadata/local LRC lookup.
 - Preserve fixed icon/artwork sizing, MPRIS capabilities, player selection,
   seek behavior, timer/signal cleanup, and cancellation of artwork downloads.
+- The optional album-art backdrop uses GdkPixbuf and a small cache. Keep the
+  backdrop module in the flat runtime package and preserve its cleanup.
 - Panel shortcuts apply to the selected player and must not intercept transport
   controls. Player-volume shortcuts affect MPRIS Volume, not system volume.
   Keep the Actions group after Placement in the Panel preferences.

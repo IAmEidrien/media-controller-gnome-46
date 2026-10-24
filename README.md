@@ -4,7 +4,7 @@ Maintainer's own space: [HUMANS.md](HUMANS.md), reserved for Eidrien's writing.
 
 GNOME 46 compatibility and convenience fork of
 [naimur900/media-controller-gnome](https://github.com/naimur900/media-controller-gnome),
-based on upstream commit `888b5e6` (3.1). The formal GitHub fork relationship and
+based on upstream commit `e292b37` (3.3). The formal GitHub fork relationship and
 upstream history are retained. This fork has its own UUID and only declares
 GNOME 46 support. The upstream release targets GNOME 47–51.
 
@@ -29,7 +29,13 @@ Rhythmbox, mpv, and so on.
   <img src="public/img-1.png" alt="Upstream panel indicator and now-playing card" width="700">
 </p>
 
-## Upstream 3.1
+## Upstream 3.3
+
+Adds the optional album-art backdrop, which renders a small blurred image behind
+the now-playing card and retains the dark glass palette in light style. The
+flat Gitpulsar layout and GNOME 46 compatibility layer include the new module.
+
+### Earlier 3.1 additions
 
 Includes the redesigned player list, player-volume slider, improved display names
 and untitled local-file titles, resizable animated lyrics, more thorough timed
@@ -227,7 +233,9 @@ This is the license required for submission to
 ## Notes
 
 Album art from streaming players and browsers arrives as an `https://` URL. It is
-downloaded once and cached under `~/.cache/media-controls/art/`.
+downloaded once and cached under `~/.cache/media-controls/art/`. The card's
+backdrops are small images made from that art, kept under
+`~/.cache/media-controls/backdrops/`: the last sixteen, the rest removed.
 
 Players that do not report a track length (most web players) simply do not show a
 seek bar. `playerctld` is ignored, since it mirrors another player that is

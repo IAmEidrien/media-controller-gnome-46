@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-/* artCache.js
- *
- * Resolves an MPRIS `mpris:artUrl` to a local file path that St can paint as a
- * background-image. Local files pass straight through; remote art (Spotify, web
- * browsers) is downloaded once and cached on disk.
- */
+/* artCache.js: resolves an MPRIS `mpris:artUrl` to a local path St can paint
+ * as a background-image. Local files pass through; remote art (Spotify,
+ * browsers) is downloaded once and cached on disk. */
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -15,17 +12,11 @@ import {artCacheDir} from './paths.js';
 const MAX_ART_BYTES = 8 * 1024 * 1024;
 const CHUNK_BYTES = 64 * 1024;
 
-/* Cover art is small and the working set is a handful of tracks; the cap only
- * exists so a long-lived session cannot grow the directory without end. */
+/* Only so a long-lived session cannot grow the directory without end. */
 const MAX_CACHED_FILES = 128;
 
-/**
- * The resolved path, written for a `background-image`. St parses this as CSS,
- * so a path with a quote in it must not break out.
- *
- * @param {string} path a path ArtCache.resolve() returned
- * @returns {string}
- */
+/* St parses background-image as CSS, so a quote in the path must not break
+ * out of the url(). */
 export function cssUrl(path) {
     return `url("${path.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}")`;
 }
@@ -45,10 +36,7 @@ export class ArtCache {
         }
     }
 
-    /**
-     * @param {string} url an artUrl from MPRIS metadata
-     * @returns {Promise<string|null>} a local path, or null when unavailable
-     */
+    /* Resolves to a local path, or null when the art is unavailable. */
     async resolve(url) {
         if (!url)
             return null;
@@ -69,7 +57,7 @@ export class ArtCache {
         if (GLib.file_test(path, GLib.FileTest.EXISTS))
             return path;
 
-        /* Two tracks can request the same art before the first fetch lands. */
+        /* Two tracks can ask for the same art before the first fetch lands. */
         if (this._pending.has(url))
             return this._pending.get(url);
 
@@ -79,8 +67,8 @@ export class ArtCache {
         return download;
     }
 
-    /* GJS does not promisify GIO-style async methods on its own, and patching
-     * the prototypes would affect every consumer in the shell process. */
+    /* Hand-rolled promises: patching the GIO prototypes would affect every
+     * consumer in the shell process. */
     _send(message) {
         return new Promise((resolve, reject) => {
             this._session.send_async(
@@ -109,14 +97,10 @@ export class ArtCache {
         });
     }
 
-    /**
-     * Read the body a chunk at a time, giving up the moment it exceeds the cap.
-     * `send_and_read_async` would buffer the whole response first, so a hostile
-     * or misconfigured server could spike the compositor's memory before the
-     * size was ever looked at — and `artUrl` comes from whatever the player says.
-     *
-     * @returns {Promise<GLib.Bytes|null>} null when empty or over the cap
-     */
+    /* Read in chunks and give up as soon as the cap is passed. artUrl comes
+     * from the player, and send_and_read_async would buffer a hostile response
+     * whole in the compositor before its size was checked. Resolves to null
+     * when empty or over the cap. */
     async _readBounded(stream) {
         const chunks = [];
         let total = 0;
@@ -145,8 +129,7 @@ export class ArtCache {
         return new GLib.Bytes(data);
     }
 
-    /* Drop the least recently modified files once the directory outgrows the
-     * cap. Runs only after a fresh download, so it is off the UI path. */
+    /* Drop the oldest files past the cap; runs only after a fresh download. */
     _prune() {
         const attributes = `${Gio.FILE_ATTRIBUTE_STANDARD_NAME},${Gio.FILE_ATTRIBUTE_TIME_MODIFIED}`;
         this._cacheDir.enumerate_children_async(
@@ -220,9 +203,8 @@ export class ArtCache {
                 return null;
             }
 
-            /* A declared length rejects the obvious case without transferring a
-             * byte; a server that lies, or answers chunked, is still bounded by
-             * the running total in _readBounded(). */
+            /* Rejects the obvious case without transferring a byte; a server
+             * that lies or answers chunked is still bounded by _readBounded(). */
             const declared = message.get_response_headers().get_content_length();
             if (declared > MAX_ART_BYTES) {
                 stream.close(null);

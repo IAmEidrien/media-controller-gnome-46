@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-/* lyricsPanel.js
- *
- * The card's lyrics. Timed lyrics light up the line being sung and keep it in
- * view; plain lyrics look the same but stay put.
- */
+/* lyricsPanel.js: the card's lyrics. Timed lyrics light up the line being
+ * sung and keep it in view; plain lyrics look the same but stay put. */
 
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
@@ -17,13 +14,8 @@ import { gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.j
 import { boxOrientation } from './compat.js';
 import { US_PER_SECOND } from './transport.js';
 
-/**
- * The quote bubble the lyrics button and the empty panel both wear. Bundled,
- * since no stock symbolic icon says "lyrics"; the `-symbolic.svg` name is what
- * makes St recolor it like a theme icon.
- *
- * @returns {Gio.Icon}
- */
+/* Bundled, since no stock symbolic icon says "lyrics". The `-symbolic.svg`
+ * name makes St recolor it like a theme icon. */
 export function lyricsIcon() {
     return new Gio.FileIcon({
         file: Gio.File.new_for_uri(import.meta.url).get_parent()
@@ -73,9 +65,8 @@ function describeTrack(player) {
     return {busName, title, artists, album, length, url, lyrics};
 }
 
-/* Field by field rather than through JSON: this runs on every property change
- * of the player while the lyrics are shown, and `lyrics` can be the whole text
- * of the song. */
+/* Field by field, not JSON: this runs on every player change while lyrics are
+ * shown, and `lyrics` can be the song's whole text. */
 function sameTrack(a, b) {
     return b !== null &&
         a.busName === b.busName && a.title === b.title && a.album === b.album &&
@@ -185,7 +176,7 @@ export const LyricsPanel = GObject.registerClass({
         this.add_child(this._scrollView);
     }
 
-    /** @param {boolean} open whether the lyrics button is on */
+    /* Whether the lyrics button is on. */
     setOpen(open) {
         if (open === this._open)
             return;
@@ -193,7 +184,7 @@ export const LyricsPanel = GObject.registerClass({
         this._reveal(open);
     }
 
-    /** @param {boolean} active whether the card is on screen */
+    /* Whether the card is on screen. */
     setActive(active) {
         if (active === this._active)
             return;
@@ -204,10 +195,8 @@ export const LyricsPanel = GObject.registerClass({
         this._reveal(active);
     }
 
-    /**
-     * @param {number} wanted the height the settings ask for, in pixels
-     * @param {number} room the most the panel may take up, in stage pixels
-     */
+    /* wanted is the setting in logical pixels; room is the most the panel may
+     * take, in stage pixels. */
     setHeight(wanted, room) {
         const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
         const fits = Math.floor((room - this.get_theme_node().get_vertical_padding()) / scale);
@@ -216,7 +205,7 @@ export const LyricsPanel = GObject.registerClass({
             this.style = style;
     }
 
-    /** @param {object|null} player null when nothing is playing a song */
+    /* null when nothing is playing a song. */
     update(player) {
         this._player = player;
         if (player)
@@ -224,7 +213,7 @@ export const LyricsPanel = GObject.registerClass({
         this._sync(LOOKUP_DELAY_MS);
     }
 
-    /** @param {number} position in microseconds */
+    /* position is in microseconds. */
     setPosition(position) {
         this._anchor = position;
         this._anchorTime = GLib.get_monotonic_time();
@@ -247,7 +236,7 @@ export const LyricsPanel = GObject.registerClass({
     }
 
     /* The card grows and shrinks with the panel rather than jumping. Off
-     * screen there is nothing to watch, so the panel just takes its size. */
+     * screen the panel just takes its size. */
     _expand(expanded) {
         if (expanded === this._expanded)
             return;
@@ -278,7 +267,7 @@ export const LyricsPanel = GObject.registerClass({
         });
     }
 
-    /* Back to the natural height when open, out of the layout when closed. */
+    /* Natural height when open, out of the layout when closed. */
     _settle() {
         this.remove_transition('height');
         this.remove_transition('opacity');
@@ -346,7 +335,7 @@ export const LyricsPanel = GObject.registerClass({
         }
     }
 
-    /* No text means a lookup is under way, which the icon shows by pulsing. */
+    /* No text means a lookup is under way, shown by the pulsing icon. */
     _showStatus(text) {
         this._clearLines();
         this._statusLabel.text = text ?? '';
@@ -357,8 +346,8 @@ export const LyricsPanel = GObject.registerClass({
         this._updatePulse();
     }
 
-    /* Only while the panel is seen, so a closed card does not keep animating.
-     * The pulse starts and ends at rest, so with animations off nothing moves. */
+    /* Only while the panel is seen. The pulse starts and ends at rest, so with
+     * animations off nothing moves. */
     _updatePulse() {
         const icon = this._statusIcon;
         const pulse = this._searching && this._shown();
@@ -399,8 +388,7 @@ export const LyricsPanel = GObject.registerClass({
         this._searching = false;
         this._updatePulse();
 
-        /* Set out like timed lines, but all lit and never followed, since no
-         * line is known to be the one being sung. */
+        /* Plain lyrics: set out like timed ones, all lit and never followed. */
         if (!lyrics.synced) {
             for (const {text} of lyrics.lines) {
                 if (!text) {
