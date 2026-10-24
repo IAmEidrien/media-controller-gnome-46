@@ -955,6 +955,13 @@ export const MediaCard = GObject.registerClass({
             `width: ${size}px; height: ${size}px; border-radius: ${radius}px;${image}`;
     }
 
+    /**
+     * Called on every change of the player on screen, which is what keeps the
+     * card current: the card does not also listen for the player's 'changed',
+     * which would render each change twice.
+     *
+     * @param {object|null} player
+     */
     setPlayer(player) {
         if (this._player === player) {
             this.sync();
@@ -965,7 +972,6 @@ export const MediaCard = GObject.registerClass({
         this._player = player;
 
         if (player) {
-            this._playerSignals.push(player.connect('changed', () => this.sync()));
             this._playerSignals.push(player.connect('seeked', (_p, position) => {
                 this._position = position;
                 this._updateSlider();

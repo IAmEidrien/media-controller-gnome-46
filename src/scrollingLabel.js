@@ -39,6 +39,7 @@ class ScrollingLabel extends St.Widget {
         this._speed = 30;
         this._rightToLeft = false;
         this._loopForever = true;
+        this._playing = true;
 
         /* Scroll distance for the current text; 0 when it fits or scrolling is off. */
         this._distance = 0;
@@ -64,6 +65,19 @@ class ScrollingLabel extends St.Widget {
          * style-changed alone would never restart it once they are back on. */
         St.Settings.get().connectObject('notify::enable-animations',
             () => this._update(true), this);
+        /* Unmapped (the panel hides under a fullscreen window), Clutter skips
+         * transitions and onComplete runs at once, which would spin the loop
+         * without drawing anything. The pass is dropped while hidden and starts
+         * over once the label is back. It is the box that moves, and a parent
+         * maps before its children, so the box is the one watched. */
+        this._mapId = this._box.connect('notify::mapped', () => {
+            if (!this._second.visible)
+                return;
+            if (this._box.mapped)
+                this._loop();
+            else
+                this._stop();
+        });
 
         this.connect('destroy', () => this._onDestroy());
     }
@@ -99,6 +113,21 @@ class ScrollingLabel extends St.Widget {
         this._rightToLeft = rightToLeft;
         this._loopForever = loop;
         this._update(true);
+    }
+
+    /**
+     * A paused player's title finishes the pass under way and settles, rather
+     * than looping on; playing again picks the loop back up.
+     *
+     * @param {boolean} playing
+     */
+    setPlaying(playing) {
+        if (playing === this._playing)
+            return;
+        this._playing = playing;
+        /* Mid-pass, the end of the pass decides; a settled label is restarted. */
+        if (playing && this._loopForever && !this._second.visible)
+            this._update(true);
     }
 
     /* Preferred width of the text in this label's font. */
@@ -158,6 +187,9 @@ class ScrollingLabel extends St.Widget {
      * copies are identical, that lands on the same picture it started from, so
      * snapping back for the next pass is invisible — in either direction. */
     _loop() {
+        if (!this._box.mapped)
+            return;
+
         const [from, to] = this._rightToLeft
             ? [0, -this._distance]
             : [-this._distance, 0];
@@ -184,9 +216,10 @@ class ScrollingLabel extends St.Widget {
             if (this._distance <= 0)
                 return GLib.SOURCE_REMOVE;
 
-            /* One pass per track: settle back into the ellipsized label. The
-             * next setText() starts the whole thing over. */
-            if (this._loopForever)
+            /* One pass per track, or while paused: settle back into the
+             * ellipsized label. The next setText() starts the whole thing
+             * over, as does setPlaying() when looping. */
+            if (this._loopForever && this._playing)
                 this._loop();
             else
                 this._showStatic();
@@ -208,5 +241,8 @@ class ScrollingLabel extends St.Widget {
         if (this._styleId)
             this._first.disconnect(this._styleId);
         this._styleId = 0;
+        if (this._mapId)
+            this._box.disconnect(this._mapId);
+        this._mapId = 0;
     }
 });

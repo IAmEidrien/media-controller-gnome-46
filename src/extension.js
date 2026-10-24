@@ -397,6 +397,9 @@ class MediaIndicator extends PanelMenu.Button {
         this._label.setScrolling(prefs.scrollText, prefs.scrollSpeed,
             prefs.scrollRightToLeft, prefs.scrollLoop);
         this._label.setText(text);
+        /* After the text: a new track's pass is already under way by then,
+         * and is left to run rather than started over. */
+        this._label.setPlaying(player.isPlaying);
         this._label.visible = text.length > 0;
 
         this._playerIcon.visible = prefs.showPlayerIcon;

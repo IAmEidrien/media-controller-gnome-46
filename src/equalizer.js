@@ -20,8 +20,11 @@ const BAR_COUNT = 4;
 const BAR_MIN = 3;
 const BAR_MAX = 12;
 
-/* One step per animation frame group; long enough to read as a bounce rather
- * than a flicker, short enough to look alive. */
+/* How often the bars move: long enough to read as a bounce rather than a
+ * flicker, short enough to look alive. Each move is a jump, not an ease. An
+ * ease redraws the card on every frame it runs, which kept the open card at the
+ * full frame rate for the sake of a decoration; jumps cost a few frames a
+ * second. */
 const STEP_MS = 260;
 
 export const Equalizer = GObject.registerClass(
@@ -88,15 +91,10 @@ class Equalizer extends St.BoxLayout {
         }
     }
 
+    /* Whole pixels, so a bar at rest has crisp edges. */
     _step() {
-        for (const bar of this._bars) {
-            bar.remove_all_transitions();
-            bar.ease({
-                height: BAR_MIN + Math.random() * (BAR_MAX - BAR_MIN),
-                duration: STEP_MS,
-                mode: Clutter.AnimationMode.EASE_IN_OUT_SINE,
-            });
-        }
+        for (const bar of this._bars)
+            bar.height = Math.round(BAR_MIN + Math.random() * (BAR_MAX - BAR_MIN));
     }
 
     /* Settle back to the baseline: a paused player shows a flat meter, which is
@@ -106,9 +104,7 @@ class Equalizer extends St.BoxLayout {
             GLib.Source.remove(this._timeoutId);
         this._timeoutId = 0;
 
-        for (const bar of this._bars) {
-            bar.remove_all_transitions();
+        for (const bar of this._bars)
             bar.height = BAR_MIN;
-        }
     }
 });
