@@ -58,7 +58,7 @@ Rhythmbox, mpv, and so on.
 - **Panel indicator** showing the player icon, track title and artist, in a
   fixed-width slot so it does not resize as tracks change.
 - **Scrolling text**, on by default: text too wide for that slot scrolls past it
-  carousel-style instead of being ellipsized — once per track, or continuously.
+  carousel-style instead of being ellipsized, once for each new track.
 - **Playback controls** in the panel: previous, skip backward, play/pause, skip
   forward, next, plus optional shuffle and loop buttons. Each button can be
   shown or hidden independently.
@@ -163,8 +163,7 @@ in on Wayland, because the shell caches ES modules for the life of the process.
 | `show-player-icon`                                | on              | Application icon in the panel                           |
 | `show-title` / `show-artist`                      | on              | Panel text                                              |
 | `panel-text-width`                                | 300             | Width of the panel text, in pixels                      |
-| `scroll-text`                                     | on              | Scroll text wider than that, rather than ellipsizing it |
-| `scroll-loop`                                     | off             | Keep scrolling, rather than once per track              |
+| `scroll-text`                                     | on              | Scroll text wider than that once per track, rather than ellipsizing it |
 | `scroll-direction`                                | `left-to-right` | `left-to-right` or `right-to-left`                      |
 | `scroll-speed`                                    | 30              | Scrolling speed, in pixels per second                   |
 | `controls-on-left`                                | off             | Put the buttons before the text                         |

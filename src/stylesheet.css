@@ -1,18 +1,13 @@
 /* Media Controls
  *
- * The card pins its foreground along with its background rather than inheriting
- * the popup's: the dark palette by default, and the light one at the end of this
- * file under `.mc-light`, which the indicator sets on the menu while the shell
- * uses its light style. Only the accent color follows the desktop either way.
+ * The card pins its own colors instead of inheriting the popup's: dark by
+ * default, light under `.mc-light` (set on the menu while the shell uses its
+ * light style), and `.mc-glass` for the album-art backdrop, which is dark in
+ * either style. Only the accent color follows the desktop.
  *
- * Both palettes live in this one file on purpose. The shell would load a
- * stylesheet-light.css instead, but St only ranks an extension's rules above
- * the shell theme in the file it loads, not in one that file @imports, so the
- * variants could not share the rules below without copying all of them.
- *
- * A third set, under `.mc-glass` at the very end, restyles the dark palette
- * for the backdrop made from the album art, which the card wears as the same
- * dark glass in either style.
+ * Both palettes live in this one file on purpose: St ranks an extension's
+ * rules above the shell theme only in the file it loads, not in one that file
+ * @imports, so a separate stylesheet-light.css would have to copy every rule.
  */
 
 /* ---------- Panel indicator ---------- */
@@ -38,16 +33,14 @@
   spacing: 2px;
 }
 
-/* Equal padding on all four sides keeps the hover fill a circle around the
- * 16px icon rather than a slab as tall as the panel. */
+/* Equal padding keeps the hover fill a circle around the 16px icon. */
 .mc-panel-control {
   border-radius: 99px;
   padding: 4px;
 }
 
-/* Neutral grey reads correctly on both light and dark panels. The icon-plus-title
- * area gets no fill of its own: the whole indicator is the click target there,
- * and the shell's own `.panel-button:hover` already lights it up. */
+/* Neutral grey works on light and dark panels. The icon and title get no fill
+ * of their own: the shell's `.panel-button:hover` already lights them up. */
 .mc-panel-control:hover {
   background-color: rgba(127, 127, 127, 0.2);
 }
@@ -57,7 +50,6 @@
 }
 
 /* ---------- Card container ---------- */
-/* The border is pinned with the background, so it matches the card. */
 .mc-card-menu {
   padding: 0;
   background-color: #222226;
@@ -77,15 +69,14 @@
   background-color: transparent;
 }
 
-/* Set here rather than on the menu: the light theme recolors a hovered menu
- * item dark, and the whole card is one menu item. */
+/* Set here, not on the menu: the light theme darkens a hovered menu item, and
+ * the whole card is one menu item. */
 .mc-card {
   color: #ffffff;
 }
 
-/* The backdrop made from the album art, and the sheen over it. The radius is
- * the menu's own, less its border, like the scrim's. The images are set
- * inline; the sheen stays clear until `.mc-glass` is set. */
+/* The album-art backdrop and its sheen; radius is the menu's less its border.
+ * Images are set inline; the sheen stays clear until `.mc-glass`. */
 .mc-card-backdrop {
   border-radius: 19px;
   background-size: cover;
@@ -95,8 +86,7 @@
   border-radius: 19px;
 }
 
-/* The padding is the content's, not the card's, so the scrim behind the player
- * list can reach the card's edges. */
+/* Padding on the content, not the card, so the scrim reaches the card's edges. */
 .mc-card-content {
   spacing: 12px;
   padding: 14px;
@@ -108,20 +98,16 @@
   spacing: 12px;
 }
 
-/* Width, height and border-radius follow the card-art-size setting, so they are
- * applied inline alongside the artwork's background-image; the border is drawn
- * with that same radius. Neutral grey at low opacity reads as a hairline on
- * both light and dark themes. */
+/* Size and radius come from card-art-size and are set inline with the
+ * background-image. */
 .mc-art {
   background-color: rgba(127, 127, 127, 0.2);
   background-size: cover;
   border: 1px solid rgba(85, 85, 85, 0.4);
 }
 
-/* Clicking the artwork raises the player's window, so it needs a cue that it is
- * a target at all. The accent color is the same one the equalizer and the seek
- * bar use, and only the border moves — the artwork itself stays untouched.
- * Players that cannot be raised are left non-reactive, so they never hover. */
+/* The artwork raises the player's window, so hovering it lights the border.
+ * Players that cannot be raised leave it non-reactive. */
 .mc-art:hover,
 .mc-art:focus {
   border-color: -st-accent-color;
@@ -154,12 +140,10 @@
   spacing: 4px;
 }
 
-/* The lyrics button and the gear, side by side. */
 .mc-card-actions-top {
   spacing: 4px;
 }
 
-/* Holds the equalizer, centred against the artwork. */
 .mc-card-status {
   spacing: 6px;
 }
@@ -180,16 +164,14 @@
 
 /* ---------- Equalizer ---------- */
 
-/* Height is fixed so the bars grow from a steady baseline without reflowing the
- * header. The right padding matches the gear button's own 6px, so the bars line
- * up with the gear icon above them rather than with the button's edge. */
+/* Fixed height, so the bars never reflow the header. The right padding matches
+ * the gear button's, lining the bars up with the gear icon. */
 .mc-equalizer {
   height: 12px;
   spacing: 2px;
   padding-right: 6px;
 }
 
-/* Follows the desktop accent colour, the same source the seek slider uses. */
 .mc-eq-bar {
   width: 3px;
   border-radius: 2px;
@@ -198,10 +180,9 @@
 
 /* ---------- Lyrics ---------- */
 
-/* The height is set inline from the lyrics-height setting, and fixed so the
- * controls below do not jump while lyrics load. The top padding stands in for
- * the card's spacing, which would otherwise appear all at once while the panel
- * grows. */
+/* Height is set inline from lyrics-height and fixed, so the controls below do
+ * not jump while lyrics load. The top padding stands in for card spacing, so
+ * the gap grows with the panel. */
 .mc-lyrics {
   padding-top: 12px;
 }
@@ -214,8 +195,7 @@
   spacing: 2px;
 }
 
-/* Lines are dimmed through opacity, never weight, so they do not rewrap as
- * they light up. */
+/* Dimmed by opacity, never weight, so lines do not rewrap as they light up. */
 .mc-lyrics-line {
   padding: 4px 8px;
   border-radius: 10px;
@@ -280,8 +260,6 @@
 
 /* ---------- Controls ---------- */
 
-/* One stacked row: shuffle pinned to the left edge, loop to the right, the
- * transport cluster centred against the full card width. */
 .mc-controls-row {
   padding: 2px 0 0 0;
 }
@@ -290,8 +268,8 @@
   spacing: 6px;
 }
 
-/* Buttons also carry .message-media-control, which the theme styles for its
- * own popup background. These are the dark theme's colors, for the dark card. */
+/* The buttons also carry .message-media-control, which the theme styles for
+ * its own popup; these pin the dark theme's colors. */
 .mc-card .message-media-control {
   color: #ffffff;
 }
@@ -331,8 +309,8 @@
   icon-size: 28px;
 }
 
-/* Shuffle and loop: quieter than the transport buttons, and square padding so
- * the hover fill stays a circle around the smaller icon. */
+/* Shuffle and loop: quieter, with square padding so the hover fill stays a
+ * circle. */
 .mc-mode-button {
   padding: 8px;
 }
@@ -341,24 +319,20 @@
   icon-size: 16px;
 }
 
-/* An engaged mode wears the desktop accent colour — the same source the
- * equalizer bars and the seek slider use. Also applies to the panel's copies
- * of these buttons. */
+/* An engaged mode wears the accent color; also used by the panel's buttons. */
 .mc-mode-on StIcon {
   color: -st-accent-color;
 }
 
 /* ---------- Footer: player and volume ---------- */
 
-/* Set off from the controls by a hairline, like a toolbar along the bottom. */
 .mc-card-footer {
   spacing: 14px;
   padding-top: 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-/* The player on screen as a pill: its icon, its name, and an arrow that turns
- * over while the list is open. The cap leaves the volume bar most of the row. */
+/* The max width leaves the volume bar most of the row. */
 .mc-player-picker {
   padding: 5px 10px 5px 7px;
   border-radius: 99px;
@@ -414,8 +388,7 @@
   height: 18px;
 }
 
-/* The fill and the thumb both wear the desktop accent color. Hover is named
- * too, or the theme's own .slider:hover would turn the thumb white. */
+/* :hover is restated, or the theme's .slider:hover turns the thumb white. */
 .mc-card .mc-volume,
 .mc-card .mc-volume:hover {
   color: -st-accent-color;
@@ -425,15 +398,13 @@
 
 /* ---------- Player list ---------- */
 
-/* Dims the card while the player list is open. The radius is the menu's own,
- * less its border, so the dimming follows the card's corners. */
+/* Radius is the menu's less its border, following the card's corners. */
 .mc-card-scrim {
   border-radius: 19px;
   background-color: rgba(0, 0, 0, 0.4);
 }
 
-/* Floats over the card, above the player button. A single shadow layer: St
- * cannot draw more than one. */
+/* A single shadow: St cannot draw more than one. */
 .mc-player-list {
   padding: 6px;
   spacing: 2px;
@@ -455,8 +426,7 @@
   -st-vfade-offset: 24px;
 }
 
-/* With the fade already saying "there is more", the scrollbar only needs to
- * say where you are: a thin pill, quieter than the theme's own. */
+/* The fade already says "more"; the scrollbar is a thin, quiet pill. */
 .mc-player-list-scroll StScrollBar {
   min-width: 3px;
 }
@@ -499,7 +469,7 @@
   spacing: 10px;
 }
 
-/* The artwork is painted inline as a background-image, like the card's own. */
+/* Artwork is set inline as a background-image. */
 .mc-player-row-art {
   width: 40px;
   height: 40px;
@@ -535,8 +505,7 @@
   color: rgba(255, 255, 255, 0.55);
 }
 
-/* Marks the player on screen, in the accent color like everything else that
- * says "this one". */
+/* Marks the player on screen. */
 .mc-player-row-check {
   icon-size: 16px;
   color: -st-accent-color;
@@ -544,11 +513,9 @@
 
 /* ---------- Light style ---------- */
 
-/* Applies under `.mc-light`, set on the menu while the shell uses its light
- * style. Each rule is the light counterpart of a dark color above: the card
- * turns white, and the pinned shell colors become the light theme's. Dim text
- * runs at a higher opacity than its dark twin, since dark-on-white loses more
- * contrast to the same alpha; each tier lands near its dark contrast. */
+/* Light counterparts of the dark colors above, under `.mc-light`. Dim text
+ * uses a higher opacity than its dark twin: dark-on-white loses more contrast
+ * to the same alpha. */
 
 .mc-card-menu.mc-light {
   background-color: #ffffff;
@@ -603,8 +570,8 @@
   -barlevel-background-color: rgba(34, 34, 38, 0.1);
 }
 
-/* The light theme's .message-media-control colors. Every state is restated:
- * the plain rule outranks the dark :hover and :insensitive rules above. */
+/* Every state is restated: the plain rule outranks the dark :hover and
+ * :insensitive rules above. */
 .mc-light .mc-card .message-media-control {
   color: #222226;
 }
@@ -645,8 +612,7 @@
   background-color: transparent;
 }
 
-/* A lighter scrim than the dark card's: the white list already stands off a
- * white card once it is dimmed this far. */
+/* Lighter than the dark scrim: enough to set the white list off the card. */
 .mc-light .mc-card-scrim {
   background-color: rgba(0, 0, 0, 0.2);
 }
@@ -682,29 +648,23 @@
 
 /* ---------- Glass ---------- */
 
-/* Applies under `.mc-glass`, set on the menu while the card wears a backdrop
- * made from the album art. The backdrop is dark in either style, so the menu
- * drops `.mc-light` meanwhile and these build on the dark palette. The artwork
- * brings the color now, so the accent color gives way to white, and the
- * shell's solid greys give way to translucent fills the backdrop shows
- * through, like frosted glass. The text needs nothing: the backdrop is
- * darkened until the dark palette reads on it. */
+/* Under `.mc-glass`, while the card wears the album-art backdrop. It is dark
+ * in either style, so `.mc-light` is dropped and these build on the dark
+ * palette: white instead of the accent color, translucent fills instead of
+ * solid greys. The text needs nothing; backdrop.js darkens the art for it. */
 
-/* The menu's background, under this border, is set inline to the color along
- * the backdrop's edge. */
+/* The menu's background is set inline to the backdrop's edge color. */
 .mc-card-menu.mc-glass {
   border-color: rgba(255, 255, 255, 0.16);
 }
 
-/* Light from above: a little brighter at the top, a little deeper at the
- * bottom, where the controls sit. */
+/* Light from above: brighter at the top, deeper under the controls. */
 .mc-glass .mc-card-sheen {
   background-gradient-direction: vertical;
   background-gradient-start: rgba(255, 255, 255, 0.08);
   background-gradient-end: rgba(0, 0, 0, 0.14);
 }
 
-/* The artwork lifts off the glass. */
 .mc-glass .mc-art {
   border-color: rgba(255, 255, 255, 0.14);
   box-shadow: 0 8px 24px 0 rgba(0, 0, 0, 0.4);
@@ -719,8 +679,7 @@
   background-color: rgba(255, 255, 255, 0.14);
 }
 
-/* Open lyrics, and engaged shuffle and loop below: a lit pill behind a
- * full-strength icon, since a white icon alone would look like any other. */
+/* Engaged buttons get a lit pill: a white icon alone looks like any other. */
 .mc-glass .mc-lyrics-button:checked {
   background-color: rgba(255, 255, 255, 0.18);
 }
@@ -770,7 +729,7 @@
   color: #ffffff;
 }
 
-/* After the hover rule, which it has to outrank on an engaged button. */
+/* After the hover rule, which it must outrank. */
 .mc-glass .mc-card .mc-mode-on {
   background-color: rgba(255, 255, 255, 0.18);
 }
@@ -801,8 +760,7 @@
   background-color: transparent;
 }
 
-/* The list carries the card's backdrop as its own background-image, set
- * inline: a sheet of the same glass, lifted off the dimmed card. */
+/* The list carries the card's backdrop as an inline background-image. */
 .mc-glass .mc-player-list {
   background-size: cover;
   border-color: rgba(255, 255, 255, 0.16);

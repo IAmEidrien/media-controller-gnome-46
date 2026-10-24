@@ -94,19 +94,13 @@
     <key name="scroll-text" type="b">
       <default>true</default>
       <summary>Scroll panel text that does not fit</summary>
-      <description>Text wider than panel-text-width loops past it instead of being truncated.</description>
+      <description>Text wider than panel-text-width scrolls past it once for each new track, then rests truncated with an ellipsis.</description>
     </key>
 
     <key name="scroll-speed" type="i">
       <default>30</default>
       <range min="10" max="120"/>
       <summary>Scrolling speed in pixels per second</summary>
-    </key>
-
-    <key name="scroll-loop" type="b">
-      <default>false</default>
-      <summary>Keep scrolling the panel text</summary>
-      <description>When false the text scrolls once per track and then rests, truncated with an ellipsis.</description>
     </key>
 
     <key name="scroll-direction"

@@ -3,8 +3,7 @@ SRC     = src
 INSTALL_DIR = $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
 ZIP     = $(UUID).shell-extension.zip
 
-# Throwaway virtualenv for the shexli static analyzer. Kept out of the repo and
-# reused across runs, since building it hits the network.
+# Virtualenv for the shexli analyzer: outside git, reused since it hits the network.
 SHEXLI_VENV = .shexli-venv
 SOURCES = $(SRC)/extension.js $(SRC)/prefs.js $(SRC)/mpris.js $(SRC)/mediaCard.js \
           $(SRC)/artCache.js $(SRC)/backdrop.js $(SRC)/playerIcons.js $(SRC)/scrollingLabel.js \
@@ -53,16 +52,12 @@ check:
 	@glib-compile-schemas --strict --dry-run $(SRC)/schemas/ && echo "ok   schemas"
 	@python3 -c "import json;json.load(open('$(SRC)/metadata.json'))" && echo "ok   metadata.json"
 
-# Static analysis for extensions.gnome.org packaging and review issues. Runs
-# against a freshly packed zip — the actual submission artifact.
+# EGO review checks, run against a freshly packed zip (the actual upload).
 shexli: pack | $(SHEXLI_VENV)/.installed
 	@$(SHEXLI_VENV)/bin/shexli "$(CURDIR)/$(ZIP)"
 
-# Build the analyzer's virtualenv once, then reuse it. `virtualenv` is not
-# assumed present, so the stdlib venv module is used. tree-sitter is held below
-# 0.26, which segfaults against shexli's 0.25 JavaScript grammar. The sentinel
-# is written only on success, so a failed install is retried rather than left
-# half-built. `make clean-shexli` forces a full rebuild.
+# tree-sitter 0.26 segfaults with shexli's 0.25 JavaScript grammar. The sentinel
+# is written only on success, so a failed install is retried.
 $(SHEXLI_VENV)/.installed:
 	python3 -m venv $(SHEXLI_VENV)
 	$(SHEXLI_VENV)/bin/pip install --upgrade pip
@@ -101,9 +96,3 @@ logs:
 
 clean:
 	rm -f $(SRC)/schemas/gschemas.compiled $(ZIP)
-
-
-
-# make shexli          # pack a fresh zip + run shexli against it
-# make check shexli    # your literal phrasing: syntax-check, then shexli
-# make clean-shexli    # delete the analyzer env to force a rebuild

@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-/* scrollingLabel.js
- *
- * The panel's track label. It occupies a fixed width and either ellipsizes
- * text that does not fit or scrolls it, carousel style: the text is drawn
- * twice so the tail of one copy is still on screen while the head of the next
- * scrolls in.
- */
+/* scrollingLabel.js: the panel's fixed-width track label. Text that does not
+ * fit is ellipsized, or scrolled once per track, carousel style: drawn twice,
+ * so the tail of one copy is still on screen as the head of the next comes in. */
 
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
@@ -15,19 +11,18 @@ import St from 'gi://St';
 
 import {boxOrientation} from './compat.js';
 
-/* Blank space between the two copies, so the loop reads as a gap rather than
- * the title running straight into itself. */
+/* Space between the two copies, so the wrap reads as a gap. */
 const GAP = 32;
 
-/* Long enough to read the beginning of the title before it moves off. */
+/* Time to read the start of the title before it moves off. */
 const PAUSE_MS = 1200;
 
 export const ScrollingLabel = GObject.registerClass(
 class ScrollingLabel extends St.Widget {
     _init(styleClass) {
         super._init({
-            /* FixedLayout hands each child its natural size, so the copies keep
-             * their full text width no matter how narrow the window gets. */
+            /* FixedLayout gives each child its natural size, so the copies keep
+             * their full text width however narrow the label is. */
             layout_manager: new Clutter.FixedLayout(),
             clip_to_allocation: true,
             y_align: Clutter.ActorAlign.CENTER,
@@ -38,12 +33,10 @@ class ScrollingLabel extends St.Widget {
         this._scrolling = false;
         this._speed = 30;
         this._rightToLeft = false;
-        this._loopForever = true;
-        this._playing = true;
 
-        /* Scroll distance for the current text; 0 when it fits or scrolling is off. */
+        /* 0 when the text fits or scrolling is off. */
         this._distance = 0;
-        this._loopId = 0;
+        this._settleId = 0;
 
         this._box = new St.BoxLayout({
             ...boxOrientation(Clutter.Orientation.HORIZONTAL),
@@ -59,22 +52,23 @@ class ScrollingLabel extends St.Widget {
         this.add_child(this._box);
 
         /* Widths measured before the theme resolves the font are wrong, and the
-         * font can change later (theme switch, font-size change). */
+         * font can change later. */
         this._styleId = this._first.connect('style-changed', () => this._update());
-        /* With animations off the label sits static at its scroll distance, so
-         * style-changed alone would never restart it once they are back on. */
+        /* style-changed alone would not restart scrolling once animations are
+         * switched back on. */
         St.Settings.get().connectObject('notify::enable-animations',
             () => this._update(true), this);
-        /* Unmapped (the panel hides under a fullscreen window), Clutter skips
-         * transitions and onComplete runs at once, which would spin the loop
-         * without drawing anything. The pass is dropped while hidden and starts
-         * over once the label is back. It is the box that moves, and a parent
-         * maps before its children, so the box is the one watched. */
+        /* While unmapped (the panel hides under a fullscreen window), Clutter
+         * skips transitions and runs onComplete at once: a pass started then
+         * would be lost, and one under way would keep the frame clock ticking
+         * with nothing drawn. So the pass waits, and starts over once the label
+         * is back. The box is watched because it is what moves, and a parent
+         * maps before its children. */
         this._mapId = this._box.connect('notify::mapped', () => {
             if (!this._second.visible)
                 return;
             if (this._box.mapped)
-                this._loop();
+                this._runPass();
             else
                 this._stop();
         });
@@ -82,7 +76,6 @@ class ScrollingLabel extends St.Widget {
         this.connect('destroy', () => this._onDestroy());
     }
 
-    /** @param {string} text */
     setText(text) {
         if (text === this._text)
             return;
@@ -90,7 +83,6 @@ class ScrollingLabel extends St.Widget {
         this._update(true);
     }
 
-    /** @param {number} width the fixed width of the label, in pixels */
     setWidth(width) {
         if (width === this._width)
             return;
@@ -98,44 +90,22 @@ class ScrollingLabel extends St.Widget {
         this._update(true);
     }
 
-    /**
-     * @param {boolean} enabled
-     * @param {number} speed pixels per second
-     * @param {boolean} rightToLeft text travels leftward, as it is read
-     * @param {boolean} loop keep scrolling, rather than one pass per track
-     */
-    setScrolling(enabled, speed, rightToLeft, loop) {
+    /* speed is in pixels per second. */
+    setScrolling(enabled, speed, rightToLeft) {
         if (enabled === this._scrolling && speed === this._speed &&
-            rightToLeft === this._rightToLeft && loop === this._loopForever)
+            rightToLeft === this._rightToLeft)
             return;
         this._scrolling = enabled;
         this._speed = speed;
         this._rightToLeft = rightToLeft;
-        this._loopForever = loop;
         this._update(true);
     }
 
-    /**
-     * A paused player's title finishes the pass under way and settles, rather
-     * than looping on; playing again picks the loop back up.
-     *
-     * @param {boolean} playing
-     */
-    setPlaying(playing) {
-        if (playing === this._playing)
-            return;
-        this._playing = playing;
-        /* Mid-pass, the end of the pass decides; a settled label is restarted. */
-        if (playing && this._loopForever && !this._second.visible)
-            this._update(true);
-    }
-
-    /* Preferred width of the text in this label's font. */
     _textWidth() {
         return this._first.clutter_text.get_preferred_width(-1)[1];
     }
 
-    /** @param {boolean} force restart the animation even if the geometry matches */
+    /* force restarts the pass even if the geometry is unchanged. */
     _update(force = false) {
         this._first.text = this._text;
         this.set_width(this._width);
@@ -148,14 +118,13 @@ class ScrollingLabel extends St.Widget {
         }
 
         const distance = fullWidth + GAP;
-        /* style-changed fires on every hover / menu open. If nothing moved,
-         * leave the label alone instead of replaying the scroll. */
+        /* style-changed fires on every hover and menu open; do not replay the
+         * scroll when nothing moved. */
         if (!force && this._distance === distance)
             return;
 
         this._stop();
         this._first.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
-        /* Let the copies run to their full width and off the clipped edge. */
         this._first.set_width(-1);
         this._second.text = this._text;
         this._second.visible = true;
@@ -163,10 +132,8 @@ class ScrollingLabel extends St.Widget {
         this._start();
     }
 
-    /* Scrolling off, the text already fits, or the pass is over: one
-     * ellipsized copy. Pinning it to the window is what makes Pango add the
-     * ellipsis — left at its natural width it would simply be cut off by the
-     * clip. */
+    /* One ellipsized copy. Pinning it to the label's width is what makes Pango
+     * add the ellipsis; at its natural width the clip would just cut it off. */
     _showStatic() {
         this._stop();
         this._first.clutter_text.ellipsize = Pango.EllipsizeMode.END;
@@ -175,18 +142,17 @@ class ScrollingLabel extends St.Widget {
     }
 
     _start() {
-        /* Respect the accessibility setting; the ellipsized copy stays readable. */
         if (!St.Settings.get().enable_animations) {
             this._showStatic();
             return;
         }
-        this._loop();
+        this._runPass();
     }
 
-    /* One pass shifts the box by exactly one copy plus the gap. Because the two
-     * copies are identical, that lands on the same picture it started from, so
-     * snapping back for the next pass is invisible — in either direction. */
-    _loop() {
+    /* The pass shifts the box by one copy plus the gap, which lands on the same
+     * picture it started from, so settling into the static label is seamless
+     * in either direction. */
+    _runPass() {
         if (!this._box.mapped)
             return;
 
@@ -200,38 +166,27 @@ class ScrollingLabel extends St.Widget {
             duration: (this._distance / Math.max(1, this._speed)) * 1000,
             delay: PAUSE_MS,
             mode: Clutter.AnimationMode.LINEAR,
-            onComplete: () => this._queueLoop(),
+            onComplete: () => this._queueSettle(),
         });
     }
 
-    /* Clutter drops the finished transition *after* onComplete returns, and the
-     * drop is by property name — so work done from inside the callback is torn
-     * down with the pass that spawned it. Everything after a pass therefore
-     * happens from an idle, once that cleanup is over. */
-    _queueLoop() {
-        if (this._loopId)
+    /* Clutter removes the finished transition by property name *after*
+     * onComplete returns, tearing down anything the callback set up, so
+     * settling happens from an idle. */
+    _queueSettle() {
+        if (this._settleId)
             return;
-        this._loopId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-            this._loopId = 0;
-            if (this._distance <= 0)
-                return GLib.SOURCE_REMOVE;
-
-            /* One pass per track, or while paused: settle back into the
-             * ellipsized label. The next setText() starts the whole thing
-             * over, as does setPlaying() when looping. */
-            if (this._loopForever && this._playing)
-                this._loop();
-            else
-                this._showStatic();
-
+        this._settleId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            this._settleId = 0;
+            this._showStatic();
             return GLib.SOURCE_REMOVE;
         });
     }
 
     _stop() {
-        if (this._loopId)
-            GLib.Source.remove(this._loopId);
-        this._loopId = 0;
+        if (this._settleId)
+            GLib.Source.remove(this._settleId);
+        this._settleId = 0;
         this._box.remove_all_transitions();
         this._box.translation_x = 0;
     }

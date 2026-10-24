@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-/* extension.js */
+/* extension.js: the panel indicator (track text and transport buttons) and its
+ * menu, which holds the now-playing card. */
 
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
@@ -22,12 +23,12 @@ import {loopIconName, nextLoopStatus, playPauseIconName, seekOffset,
 
 const ROLE = 'media-controls';
 
-/* Room for the menu's pointer arrow and borders around the card, in logical
- * pixels. The stock theme's come to 8; the rest is slack for other themes. */
+/* Logical pixels for the menu's arrow and borders around the card: the stock
+ * theme needs 8, the rest is slack for other themes. */
 const MENU_FRAME = 24;
 
-/* `atEnd` positions are appended after everything already in that panel box —
- * for "far right" that means past the quick settings menu. */
+/* `atEnd` appends after everything in that panel box; for "far right" that is
+ * past the quick settings menu. */
 const PANEL_POSITIONS = {
     'far-left': {box: 'left', atEnd: false},
     'left': {box: 'left', atEnd: true},
@@ -36,8 +37,7 @@ const PANEL_POSITIONS = {
     'far-right': {box: 'right', atEnd: true},
 };
 
-/* Every key the indicator renders from. Each gets a `changed::` handler that
- * refreshes the cache in _readSettings() and re-syncs. */
+/* Every key the indicator renders from; see _readSettings(). */
 const PANEL_KEYS = [
     'show-previous',
     'show-play-pause',
@@ -53,7 +53,6 @@ const PANEL_KEYS = [
     'scroll-text',
     'scroll-speed',
     'scroll-direction',
-    'scroll-loop',
     'hide-when-inactive',
     'controls-on-left',
 ];
@@ -66,7 +65,7 @@ class MediaIndicator extends PanelMenu.Button {
         this._settings = settings;
         this._manager = manager;
         this._orderApplied = null;
-        /* Whether the card wears its backdrop made from the album art. */
+        /* Whether the card wears its album-art backdrop. */
         this._glass = false;
         this._readSettings();
 
@@ -91,16 +90,15 @@ class MediaIndicator extends PanelMenu.Button {
                 this.menu.close();
                 extension.openPreferences();
             },
-            /* The menu deliberately stays open: switching players is something
-             * you do to look at the other player. */
+            /* The menu stays open: you switch players to look at the other one. */
             'player-selected', (_card, busName) =>
                 this._manager.selectPlayer(busName),
             'backdrop-changed', (_card, color) => this._syncBackdrop(color), this);
 
         this.menu.box.add_style_class_name('mc-card-menu');
 
-        /* The card pins its colors instead of inheriting the popup's, so the
-         * shell's light style is followed by a class rather than by the theme. */
+        /* The card pins its own colors, so the light style is followed through
+         * a class rather than the theme. */
         St.Settings.get().connectObject('notify::color-scheme',
             () => this._syncStyleVariant(), this);
         this._syncStyleVariant();
@@ -124,8 +122,8 @@ class MediaIndicator extends PanelMenu.Button {
 
         this._manager.connectObject(
             'changed', () => this.sync(),
-            /* A player appearing or leaving changes the switcher even when the
-             * player on screen stays put. */
+            /* The switcher changes when players come or go, even if the one on
+             * screen does not. */
             'players-changed', () => this.sync(), this);
 
         const onPanelKeyChanged = () => {
@@ -139,10 +137,9 @@ class MediaIndicator extends PanelMenu.Button {
         this.sync();
     }
 
-    /* Everything the card draws, the player list included, sits inside the
-     * menu box, so the one class there switches the whole card's palette. The
-     * backdrop made from the album art is dark glass in either style, so the
-     * card keeps the dark palette while it wears one. */
+    /* The whole card, player list included, sits in the menu box, so one class
+     * there switches its palette. The album-art backdrop is dark glass in
+     * either style, so the dark palette stays while it is on. */
     _syncStyleVariant() {
         if (Main.getStyleVariant() === 'light' && !this._glass)
             this.menu.box.add_style_class_name('mc-light');
@@ -150,14 +147,9 @@ class MediaIndicator extends PanelMenu.Button {
             this.menu.box.remove_style_class_name('mc-light');
     }
 
-    /**
-     * The card paints its own backdrop, and `.mc-glass` restyles its controls
-     * to sit on it. The menu box shows only along the antialiased edge of the
-     * rounded corners and under the border, so it takes the backdrop's edge
-     * color there rather than the plain card's.
-     *
-     * @param {string} color the backdrop's edge color, or '' for none
-     */
+    /* `.mc-glass` restyles the controls to sit on the backdrop. The menu box
+     * shows only along the antialiased rounded corners and under the border,
+     * so it takes the backdrop's edge color; '' means no backdrop. */
     _syncBackdrop(color) {
         const box = this.menu.box;
         this._glass = !!color;
@@ -171,8 +163,7 @@ class MediaIndicator extends PanelMenu.Button {
         this._syncStyleVariant();
     }
 
-    /* The shell keeps a menu inside the work area, less the menu's margins; the
-     * card gets that, less the frame the menu draws around it. In stage pixels. */
+    /* The work area less the menu's margins and frame, in stage pixels. */
     _roomForCard() {
         const workArea = Main.layoutManager.getWorkAreaForMonitor(
             Main.layoutManager.primaryIndex);
@@ -181,12 +172,8 @@ class MediaIndicator extends PanelMenu.Button {
         return workArea.height - menu.margin_top - menu.margin_bottom - MENU_FRAME * scale;
     }
 
-    /**
-     * sync() runs on every D-Bus property change — several times a second for
-     * players that report progress — and each GSettings read marshals a
-     * GVariant. The values only move when one of the handlers above fires, so
-     * they are read there and cached here.
-     */
+    /* Cached: sync() runs on every D-Bus property change, and each GSettings
+     * read marshals a GVariant. */
     _readSettings() {
         const settings = this._settings;
         this._prefs = {
@@ -204,23 +191,18 @@ class MediaIndicator extends PanelMenu.Button {
             scrollText: settings.get_boolean('scroll-text'),
             scrollSpeed: settings.get_int('scroll-speed'),
             scrollRightToLeft: settings.get_string('scroll-direction') === 'right-to-left',
-            scrollLoop: settings.get_boolean('scroll-loop'),
             hideWhenInactive: settings.get_boolean('hide-when-inactive'),
             controlsOnLeft: settings.get_boolean('controls-on-left'),
         };
     }
 
-    /**
-     * PanelMenu.Button opens its menu from a Clutter.ClickGesture that
-     * recognizes on press. Gestures are fed from the capture phase, so the
-     * gesture claimed every click before the control buttons nested inside us
-     * could see it — pressing a control opened the card and the control itself
-     * never emitted `clicked`. We drop the gesture and toggle from vfunc_event
-     * instead, where the press can be attributed to the actor it landed on.
-     */
+    /* PanelMenu.Button opens its menu from a Clutter.ClickGesture fed in the
+     * capture phase, which claimed every click before the nested control
+     * buttons saw it. The gesture is disabled and vfunc_event toggles instead,
+     * where the press can be attributed to the actor it landed on. */
     _disableMenuToggle() {
-        /* Shells before the gesture port have no ClickGesture at all; there the
-         * inherited vfunc_event does the toggling, and our override replaces it. */
+        /* Older shells have no ClickGesture; there vfunc_event already toggles,
+         * and the override below replaces it. */
         if (!Clutter.ClickGesture)
             return;
 
@@ -230,9 +212,8 @@ class MediaIndicator extends PanelMenu.Button {
         }
     }
 
-    /* A press anywhere on the indicator opens the card, except on the transport
-     * controls, which do their own job instead. Toggling on press rather than
-     * release matches every other panel menu in the shell. */
+    /* A press anywhere but the transport controls toggles the card; on press,
+     * like every other panel menu. */
     vfunc_event(event) {
         const type = event.type();
         const isPress = type === Clutter.EventType.BUTTON_PRESS ||
@@ -244,11 +225,8 @@ class MediaIndicator extends PanelMenu.Button {
         return Clutter.EVENT_PROPAGATE;
     }
 
-    /**
-     * Hit-test the controls box by geometry. `event.get_source()` is null for
-     * pointer events here, and picking would report a disabled control as a
-     * miss — which would open the card from a greyed-out button.
-     */
+    /* By geometry: get_source() is null for pointer events here, and picking
+     * misses a disabled control, which would open the card from it. */
     _isOnControls(event) {
         if (!this._controlsBox?.visible)
             return false;
@@ -311,7 +289,6 @@ class MediaIndicator extends PanelMenu.Button {
         this._box.add_child(this._controlsBox);
     }
 
-    /** @param {number} direction -1 to rewind, 1 to skip ahead */
     _skip(direction) {
         this._manager.activePlayer?.seek(seekOffset(this._settings, direction));
     }
@@ -336,8 +313,8 @@ class MediaIndicator extends PanelMenu.Button {
         const button = new St.Button({
             style_class: 'mc-panel-control',
             can_focus: true,
-            /* Without this the button fills the panel's height and the round
-             * hover fill stretches into a slab. */
+            /* Otherwise the button fills the panel's height and the round hover
+             * fill stretches into a slab. */
             y_align: Clutter.ActorAlign.CENTER,
             child: new St.Icon({
                 icon_name: iconName,
@@ -349,7 +326,7 @@ class MediaIndicator extends PanelMenu.Button {
         return button;
     }
 
-    /** The full text; the label itself truncates or scrolls it. */
+    /* The full text; the label truncates or scrolls it. */
     _panelText(player) {
         const parts = [];
         if (this._prefs.showTitle && player.displayTitle)
@@ -363,13 +340,11 @@ class MediaIndicator extends PanelMenu.Button {
         const player = this._manager.activePlayer;
         const prefs = this._prefs;
         this._card.setPlayer(player);
-        /* Only players whose proxy has landed: a tab for one that cannot be
-         * controlled yet would do nothing when pressed. */
+        /* Only players whose proxy has landed can be controlled. */
         this._card.setPlayers(this._manager.readyPlayers, player);
 
         if (!player) {
-            /* Drop the text before hiding: a scrolling label left with content
-             * keeps its animation running against an actor nobody can see. */
+            /* Cleared first, so no scroll is left pending on a hidden label. */
             this._label.setText('');
 
             if (prefs.hideWhenInactive) {
@@ -379,7 +354,7 @@ class MediaIndicator extends PanelMenu.Button {
                 return;
             }
 
-            /* Idle placeholder: just the generic media icon, no controls. */
+            /* Idle placeholder: the generic media icon, no controls. */
             this.container.visible = true;
             this._label.visible = false;
             this._playerIcon.icon_name = 'audio-x-generic-symbolic';
@@ -395,11 +370,8 @@ class MediaIndicator extends PanelMenu.Button {
         const text = this._panelText(player);
         this._label.setWidth(prefs.textWidth);
         this._label.setScrolling(prefs.scrollText, prefs.scrollSpeed,
-            prefs.scrollRightToLeft, prefs.scrollLoop);
+            prefs.scrollRightToLeft);
         this._label.setText(text);
-        /* After the text: a new track's pass is already under way by then,
-         * and is left to run rather than started over. */
-        this._label.setPlaying(player.isPlaying);
         this._label.visible = text.length > 0;
 
         this._playerIcon.visible = prefs.showPlayerIcon;
@@ -411,12 +383,11 @@ class MediaIndicator extends PanelMenu.Button {
         this._playButton.visible = prefs.showPlayPause;
         this._nextButton.visible = prefs.showNext;
 
-        /* Skipping needs Seek(); a player without it gets no skip buttons. */
+        /* Skip buttons need Seek(). */
         this._backButton.visible = player.canSeek && prefs.showSeekBackward;
         this._forwardButton.visible = player.canSeek && prefs.showSeekForward;
 
-        /* Shuffle and loop are optional MPRIS properties; a player that does
-         * not implement them gets no button, whatever the setting says. */
+        /* Shuffle and loop are optional in MPRIS: no support, no button. */
         this._shuffleButton.visible = prefs.showShuffle && player.canShuffle;
         this._loopButton.visible = prefs.showLoop && player.canLoop;
 
@@ -443,8 +414,7 @@ class MediaIndicator extends PanelMenu.Button {
         actor.opacity = sensitive ? 255 : 100;
     }
 
-    /* set_child_at_index() re-inserts the actor and queues a relayout even when
-     * the index does not move, so only act on a real change. */
+    /* set_child_at_index() queues a relayout even when nothing moves. */
     _applyOrder() {
         const controlsFirst = this._prefs.controlsOnLeft;
         if (controlsFirst === this._orderApplied)
@@ -455,7 +425,7 @@ class MediaIndicator extends PanelMenu.Button {
     }
 
     /* No destroy() override: every connection above is owned by `this`, so the
-     * signal tracker disconnects them all when the actor is destroyed. */
+     * signal tracker disconnects them when the actor is destroyed. */
 });
 
 export default class MediaControlsExtension extends Extension {
@@ -471,8 +441,8 @@ export default class MediaControlsExtension extends Extension {
         const {box, index} = this._placement();
         Main.panel.addToStatusArea(ROLE, this._indicator, index, box);
 
-        /* addToStatusArea unconditionally shows the container, which would undo
-         * the "hide when nothing is playing" state chosen during construction. */
+        /* addToStatusArea always shows the container, undoing a "hide when
+         * nothing is playing" state set during construction. */
         this._indicator.sync();
 
         this._settings.connectObject(
@@ -489,8 +459,7 @@ export default class MediaControlsExtension extends Extension {
         return `media-controls/${version} (${this.metadata.url})`;
     }
 
-    /* The manager does the pausing, but the setting lives here: mpris.js knows
-     * nothing about GSettings keys. */
+    /* mpris.js knows nothing about GSettings, so the setting is applied here. */
     _applyExclusivePlayback() {
         this._manager.exclusivePlayback =
             this._settings.get_boolean('pause-others-on-play');
@@ -504,8 +473,8 @@ export default class MediaControlsExtension extends Extension {
         };
     }
 
-    /* Resolve the setting to a concrete box and child index. The index is
-     * computed rather than passed as -1 so the append case is unambiguous. */
+    /* A concrete box and index; computed rather than -1 so appending is
+     * unambiguous. */
     _placement() {
         const key = this._settings.get_string('panel-position');
         const {box, atEnd} = PANEL_POSITIONS[key] ?? PANEL_POSITIONS['right'];
@@ -517,8 +486,8 @@ export default class MediaControlsExtension extends Extension {
         };
     }
 
-    /* Re-parenting keeps the indicator's statusArea role and menu registration
-     * intact, unlike destroying and re-adding it. */
+    /* Re-parenting keeps the statusArea role and menu registration, unlike
+     * destroying and re-adding the indicator. */
     _reposition() {
         if (!this._indicator)
             return;
@@ -526,14 +495,14 @@ export default class MediaControlsExtension extends Extension {
         const container = this._indicator.container;
         container.get_parent()?.remove_child(container);
 
-        /* Recompute after the removal so the end index excludes ourselves. */
+        /* After the removal, so the end index excludes the indicator itself. */
         const {boxActor, index} = this._placement();
         boxActor.insert_child_at_index(container, index);
     }
 
     disable() {
-        /* The extension has no `destroy` signal, so unlike the indicator this
-         * owner needs the explicit disconnect. */
+        /* The extension has no `destroy` signal, so this owner disconnects
+         * explicitly. */
         this._settings.disconnectObject(this);
 
         this._updateNotice?.destroy();

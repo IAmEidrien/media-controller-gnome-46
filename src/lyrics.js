@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-/* lyrics.js
- *
- * Finds a track's lyrics in the player's metadata, in an .lrc file beside a
- * local track, or on LRCLIB (lrclib.net). Imports only `gi://` modules, so it
- * can be exercised outside the shell.
- */
+/* lyrics.js: finds a track's lyrics in the player's metadata, in an .lrc file
+ * beside a local track, or on LRCLIB (lrclib.net). Imports only gi:// modules,
+ * so it can run outside the shell. */
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -41,8 +38,8 @@ const VIDEO_TITLE = /^(.+?)\s[-–—]\s(.+)$/;
  * @property {{time: number|null, text: string}[]} lines `time` in microseconds
  */
 
-/* GJS does not promisify GIO async methods, and patching their prototypes
- * would affect the whole shell. */
+/* Hand-rolled promises: patching the GIO prototypes would affect the whole
+ * shell. */
 function asyncCall(object, method, ...args) {
     return new Promise((resolve, reject) => {
         object[`${method}_async`](...args, (source, result) => {
@@ -60,12 +57,8 @@ function tagTime([, minutes, seconds, fraction = '']) {
     return ((Number(minutes) * 60 + Number(seconds)) * 1000 + millis) * 1000;
 }
 
-/**
- * Parse LRC, or plain text when no line is timed.
- *
- * @param {string|null} text
- * @returns {Lyrics|null} null when there are no words
- */
+/* LRC, or plain text when no line is timed. Returns Lyrics, or null when there
+ * are no words. */
 export function parseLyrics(text) {
     if (!text?.trim())
         return null;
@@ -182,7 +175,7 @@ function fromRecord(record, duration) {
 }
 
 export class LyricsSource {
-    /** @param {string} userAgent LRCLIB asks clients to identify themselves */
+    /* LRCLIB asks clients to identify themselves with a user agent. */
     constructor(userAgent) {
         this._session = new Soup.Session({timeout: 15, user_agent: userAgent});
         this._cancellable = new Gio.Cancellable();
@@ -190,13 +183,8 @@ export class LyricsSource {
         this._pending = new Map();
     }
 
-    /**
-     * @param {object} track `title`, `artists`, `album`, `length` (µs), `url`
-     *   and the player's own `lyrics`
-     * @param {boolean} online whether LRCLIB may be asked
-     * @returns {Promise<Lyrics|null>} rejects only when LRCLIB failed and
-     *   nothing was found locally
-     */
+    /* track: title, artists, album, length (µs), url, and the player's own
+     * lyrics. Rejects only when LRCLIB failed and nothing was found locally. */
     async lookup(track, online) {
         const fromPlayer = parseLyrics(track.lyrics);
         const fromFile = fromPlayer?.synced ? null : await this._readLrcFile(track.url);
@@ -261,14 +249,10 @@ export class LyricsSource {
         return this._pending.get(key);
     }
 
-    /*
-     * The exact match first, which LRCLIB also chases through its upstream
-     * sources; then a search of its database; then, for a video-style
-     * "Artist - Title", a search by what that names. Each step is taken until
-     * timed lyrics turn up: the exact match may hold only plain words while
-     * other records of the same recording are timed. A failed request does not
-     * stop the rest, and fails the lookup only if nothing was found.
-     */
+    /* The exact match first, then a database search, then for a video-style
+     * "Artist - Title" a search by what that names; each step only until timed
+     * lyrics turn up. A failed request fails the lookup only if nothing was
+     * found. */
     async _search(track) {
         const duration = seconds(track.length);
         const title = cleanTitle(track.title);
@@ -311,7 +295,7 @@ export class LyricsSource {
         return lyrics;
     }
 
-    /** @returns {Promise<object|null>} the decoded answer, or null on a 404 */
+    /* The decoded answer, or null on a 404. */
     async _request(endpoint, params) {
         this._cancellable.set_error_if_cancelled();
 

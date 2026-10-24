@@ -1,14 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-/* playerList.js
+/* playerList.js: the list the card's player button opens, one row per running
+ * player, for picking which one the card and the panel follow.
  *
- * The list the card's player button opens: a row for every running media
- * player, showing what each one has on, for picking which player the card and
- * the panel follow.
- *
- * A row is a player, not a browser tab. MPRIS gives an application one entry on
- * the bus, and a browser publishes only the tab that played most recently, so
- * its other tabs are not something any desktop component can see.
- */
+ * A row is a player, not a browser tab: MPRIS gives an app one bus entry, and
+ * a browser publishes only the tab that played last. */
 
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
@@ -21,8 +16,8 @@ import {cssUrl} from './artCache.js';
 import {boxOrientation} from './compat.js';
 import {Equalizer} from './equalizer.js';
 
-/* The keys that move between rows. While the list is open the rest of the card
- * is covered, so focus wraps around inside the list instead of leaving it. */
+/* The rest of the card is covered while the list is open, so focus wraps
+ * inside the list instead of leaving it. */
 const NAVIGATION_KEYS = new Map([
     [Clutter.KEY_Up, St.DirectionType.UP],
     [Clutter.KEY_Down, St.DirectionType.DOWN],
@@ -30,15 +25,15 @@ const NAVIGATION_KEYS = new Map([
     [Clutter.KEY_ISO_Left_Tab, St.DirectionType.TAB_BACKWARD],
 ]);
 
-/** Players emit 'changed' several times a second; most of it is not text. */
+/* Players emit 'changed' several times a second; most of it is not text. */
 function setText(label, text) {
     if (label.text !== text)
         label.text = text;
 }
 
-/* The shell has a helper for this, but it moved modules between the releases
- * in metadata.json. Rows are direct children of the scrolled box, so their
- * allocation is already in the adjustment's coordinates. */
+/* The shell's own helper moved modules between the releases in metadata.json.
+ * Rows are direct children of the scrolled box, so their allocation is already
+ * in the adjustment's coordinates. */
 function scrollIntoView(scrollView, actor) {
     const adjustment = scrollView.vadjustment;
     const {y1, y2} = actor.get_allocation_box();
@@ -50,7 +45,7 @@ function scrollIntoView(scrollView, actor) {
 
 export const PlayerList = GObject.registerClass({
     Signals: {
-        /* A row was picked; carries the player's MPRIS bus name. */
+        /* Carries the picked player's MPRIS bus name. */
         'player-selected': {param_types: [GObject.TYPE_STRING]},
         /* Escape was pressed inside the list. */
         'close-requested': {},
@@ -60,16 +55,15 @@ export const PlayerList = GObject.registerClass({
         super._init({
             style_class: 'mc-player-list',
             ...boxOrientation(Clutter.Orientation.VERTICAL),
-            /* So a click between rows stays in the list, rather than falling
-             * through to whatever closes it. */
+            /* A click between rows stays in the list instead of closing it. */
             reactive: true,
         });
 
         this._artCache = artCache;
         this._players = [];
         this._activeBusName = null;
-        /* Keyed by bus name. Built on first open, then kept while the same
-         * players are running. */
+        /* Keyed by bus name; built on first open, kept while the same players
+         * are running. */
         this._rows = new Map();
         this._open = false;
 
@@ -97,13 +91,7 @@ export const PlayerList = GObject.registerClass({
         this.connect('destroy', () => this._orphanArt());
     }
 
-    /**
-     * Called on every sync of the card, so it does nothing until the list is
-     * actually open.
-     *
-     * @param {object[]} players every player that can be switched to
-     * @param {string|null} activeBusName the one the card is showing
-     */
+    /* Called on every card sync, so it does nothing while the list is closed. */
     setPlayers(players, activeBusName) {
         this._players = players;
         this._activeBusName = activeBusName;
@@ -123,19 +111,14 @@ export const PlayerList = GObject.registerClass({
             row.equalizer.setActive(false);
     }
 
-    /** Hand the keyboard to the first row: the player on screen. */
+    /* The first row is the player on screen. */
     focusFirst() {
         const [first] = this._rowsBox.get_children();
         (first ?? this).grab_key_focus();
     }
 
-    /**
-     * Rows are sorted on opening and when players come or go, never in
-     * between, so a row does not jump out from under the pointer because some
-     * other player started. Everything else is updated in place.
-     *
-     * @param {boolean} sort whether to put the rows in order again
-     */
+    /* Rows are sorted only on opening and when players come or go, so a row
+     * never jumps out from under the pointer; the rest updates in place. */
     _sync(sort) {
         const current = this._players.length === this._rows.size &&
             this._players.every(player => this._rows.get(player.busName)?.player === player);
@@ -164,8 +147,8 @@ export const PlayerList = GObject.registerClass({
         }
     }
 
-    /* The player on screen first, then the rest newest first: the roster
-     * arrives oldest first, and the player opened last is the likelier pick. */
+    /* The player on screen first, then newest first: the roster arrives
+     * oldest first, and the player opened last is the likelier pick. */
     _sort() {
         const order = [...this._players].reverse();
         const active = order.findIndex(player => player.busName === this._activeBusName);
@@ -188,7 +171,7 @@ export const PlayerList = GObject.registerClass({
         const title = new St.Label({style_class: 'mc-player-row-title'});
         title.clutter_text.ellipsize = Pango.EllipsizeMode.END;
 
-        /* Which app it is, then who: "Chrome · Some Channel". */
+        /* "Chrome · Some Channel": the app, then who. */
         const appIcon = new St.Icon({
             style_class: 'mc-player-row-app-icon',
             y_align: Clutter.ActorAlign.CENTER,
@@ -238,8 +221,8 @@ export const PlayerList = GObject.registerClass({
             child: box,
         });
 
-        /* The bus name, not the player object: by the time this fires the
-         * player may have quit, and the manager is the one that knows. */
+        /* The bus name, not the player: it may have quit by the time this
+         * fires, and the manager is the one that knows. */
         const {busName} = player;
         button.connect('clicked', () => this.emit('player-selected', busName));
         button.connect('key-focus-in', () => scrollIntoView(this._scrollView, button));
@@ -251,8 +234,7 @@ export const PlayerList = GObject.registerClass({
         };
 
         /* Background players change track without the card hearing about it,
-         * so each row listens to its own player — for as long as the row
-         * exists, but only doing anything while the list is open. */
+         * so each row listens to its own player, acting only while open. */
         player.connectObject('changed', () => {
             if (this._open)
                 this._updateRow(row);
@@ -279,8 +261,8 @@ export const PlayerList = GObject.registerClass({
         row.equalizer.setPlaying(player.isPlaying);
         row.equalizer.setActive(this._open);
 
-        /* Hidden by opacity rather than `visible`, so every row keeps the same
-         * room for it and the titles line up. */
+        /* Hidden by opacity, not `visible`, so every row keeps room for it and
+         * the titles line up. */
         const active = player.busName === this._activeBusName;
         row.check.opacity = active ? 255 : 0;
         if (active !== row.button.has_style_class_name('mc-player-row-active')) {
@@ -298,8 +280,7 @@ export const PlayerList = GObject.registerClass({
         if (url === row.artUrl)
             return;
 
-        /* Resolution is async; a newer track must win even if its download
-         * finishes first. */
+        /* A newer track must win even if its download finishes first. */
         row.artUrl = url;
         const generation = ++row.artGeneration;
         row.art.style = null;

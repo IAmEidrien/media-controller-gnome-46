@@ -1,20 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-/* backdrop.js
- *
- * Turns album art into a backdrop for the card: the artwork shrunk, blurred
- * past recognition and its colors deepened, then darkened under the card's
- * white text, so the type keeps its contrast whatever the cover. The card
- * wears it in the shell's light style too, as the same dark glass.
+/* backdrop.js: turns album art into the card's backdrop: shrunk, blurred,
+ * saturated, then darkened so the card's white text keeps its contrast in the
+ * light style too.
  *
  * St cannot blur a background-image, and Clutter clips only to rectangles, so
- * a blur effect on the card would paint square corners past its rounded ones.
- * The blur is baked into a small image file instead: as a background-image it
- * takes the card's rounded corners from the stylesheet, and the GPU smooths it
- * as it is stretched to fill the card.
+ * a blur effect would paint square corners past the card's rounded ones. The
+ * blur is baked into a small PNG instead, used as a background-image that takes
+ * the rounded corners from the stylesheet.
  *
- * Like artCache.js, this imports only gi:// modules, so it runs outside the
- * shell.
- */
+ * Imports only gi:// modules, so it runs outside the shell. */
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -22,12 +16,11 @@ import GdkPixbuf from 'gi://GdkPixbuf';
 
 import {backdropCacheDir} from './paths.js';
 
-/* The art is decoded no larger than this. Nothing finer than a few pixels
- * survives the blur, so a bigger image would only cost time. */
+/* Decode size. Nothing finer than a few pixels survives the blur. */
 const SIZE = 64;
 
-/* Three passes of a box blur this wide approximate a Gaussian about a tenth of
- * the image across: shapes melt into fields of color. */
+/* Three box-blur passes approximate a Gaussian about a tenth of the image
+ * across. */
 const BLUR_RADIUS = 6;
 const BLUR_PASSES = 3;
 
@@ -35,34 +28,25 @@ const BLUR_PASSES = 3;
 const SATURATION = 1.4;
 
 /* Relative luminance the backdrop approaches but never passes, so white text
- * keeps its contrast. The curve is soft, so the dark parts of a cover barely
- * move and only the bright ones bend — the backdrop keeps its shading instead
- * of going flat. */
+ * stays readable. The curve is soft: dark areas barely move, bright ones bend,
+ * and the backdrop keeps its shading. */
 const CEILING = 0.1;
 
-/* What shows through transparent artwork: a mid grey, so it leans neither way. */
+/* Mid grey behind transparent artwork, so it leans neither way. */
 const TRANSPARENT_FILL = 0.2;
 
-/* The backdrops of the last few tracks; anything older is removed. */
+/* Backdrop files kept on disk; older ones are removed. */
 const MAX_FILES = 16;
 
-/* Kept whatever their age: the backdrop on screen, and the one it is fading
- * in over. */
+/* Never removed: the backdrop on screen and the one it fades in over. */
 const IN_USE = 2;
 
-/* Steps in the table from linear light back to sRGB: fine enough that no two
- * neighbouring 8-bit values are skipped. */
+/* Fine enough that no two neighbouring 8-bit values are skipped. */
 const SRGB_STEPS = 4096;
 
-/**
- * sRGB's transfer curve, both ways, as tables: this runs on the shell's main
- * loop, and a power per channel per pixel is most of the cost otherwise.
- * Blurring and mixing happen in linear light, where an average looks like the
- * colors mixed rather than muddied.
- *
- * @returns {{toLinear: Float32Array, toSrgb: Uint8Array}} indexed by 8-bit
- *   sRGB, and by linear light in SRGB_STEPS steps
- */
+/* The sRGB transfer curve both ways, as lookup tables: this runs on the
+ * shell's main loop, and a pow() per channel per pixel would dominate the
+ * cost. Blurring and mixing happen in linear light. */
 function buildTables() {
     const toLinear = new Float32Array(256);
     for (let i = 0; i < 256; i++) {
@@ -88,19 +72,11 @@ function luminance(r, g, b) {
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-/**
- * One pass of a box blur along one axis, as a running sum. Pixels past the
- * border repeat the border's, so the edges do not fade toward black.
- *
- * @param {Float32Array} src RGB triplets
- * @param {Float32Array} dst RGB triplets, the same size
- * @param {number} width @param {number} height
- * @param {boolean} horizontal
- */
+/* One box-blur pass along one axis over RGB triplets, as a running sum. Edge
+ * pixels repeat, so the borders do not fade toward black. */
 function boxBlur(src, dst, width, height, horizontal) {
     const lines = horizontal ? height : width;
     const last = (horizontal ? width : height) - 1;
-    /* Between neighbours along a line, and between the starts of lines. */
     const step = horizontal ? 3 : 3 * width;
     const lineStep = horizontal ? 3 * width : 3;
     const span = 2 * BLUR_RADIUS + 1;
@@ -130,12 +106,7 @@ function boxBlur(src, dst, width, height, horizontal) {
     }
 }
 
-/**
- * @param {GdkPixbuf.Pixbuf} pixbuf the decoded art
- * @param {object} tables what buildTables() returned
- * @returns {{width: number, height: number, pixels: Float32Array}} the art
- *   blurred and saturated, in linear RGB
- */
+/* The art blurred and saturated, as linear RGB in a Float32Array. */
 function blurred(pixbuf, {toLinear}) {
     const width = pixbuf.get_width();
     const height = pixbuf.get_height();
@@ -174,15 +145,9 @@ function blurred(pixbuf, {toLinear}) {
     return {width, height, pixels};
 }
 
-/**
- * Darken the blurred art below the ceiling. The light is scaled down rather
- * than mixed with black, which keeps each color's hue and saturation.
- *
- * @param {object} base what blurred() returned
- * @param {object} tables what buildTables() returned
- * @returns {{rgb: Uint8Array, edge: string}} 8-bit sRGB, and the average color
- *   along the border as CSS
- */
+/* Darken below CEILING by scaling the light rather than mixing in black, which
+ * keeps hue and saturation. Returns 8-bit sRGB and the average border color as
+ * CSS (the menu box shows it along the card's rounded corners). */
 function render(base, {toSrgb}) {
     const {width, height, pixels} = base;
     const rgb = new Uint8Array(pixels.length);
@@ -222,8 +187,8 @@ export class BackdropMaker {
     constructor() {
         this._cancellable = new Gio.Cancellable();
         this._inUse = [];
-        /* Built here rather than at module scope, so they go with the maker
-         * when the extension is disabled. */
+        /* Built here, not at module scope, so they go away with the maker when
+         * the extension is disabled. */
         this._tables = buildTables();
 
         this._dir = backdropCacheDir();
@@ -235,12 +200,8 @@ export class BackdropMaker {
         }
     }
 
-    /**
-     * @param {string} artPath a local path ArtCache.resolve() returned
-     * @returns {Promise<{path: string, color: string}|null>} the backdrop's
-     *   file, and the color along its edge as CSS; null when the art could not
-     *   be read
-     */
+    /* artPath is a path ArtCache.resolve() returned. Resolves to the
+     * backdrop's {path, color}, or null when the art could not be read. */
     async make(artPath) {
         try {
             const base = blurred(await this._decode(artPath), this._tables);
@@ -255,8 +216,8 @@ export class BackdropMaker {
                 const image = GdkPixbuf.Pixbuf.new_from_bytes(pixels,
                     GdkPixbuf.Colorspace.RGB, false, 8,
                     base.width, base.height, base.width * 3);
-                /* The image is a few kilobytes at any level; the fastest
-                 * keeps the main loop's share of this short. */
+                /* The fastest compression keeps the main loop's share short;
+                 * the file is a few kilobytes at any level. */
                 const [, png] = image.save_to_bufferv('png', ['compression'], ['1']);
                 await this._write(file, new GLib.Bytes(png));
             }
@@ -271,8 +232,7 @@ export class BackdropMaker {
         }
     }
 
-    /* Decoded at scale, and off the main loop: GdkPixbuf reads the stream in
-     * a worker thread. */
+    /* Decoded at scale, in a GdkPixbuf worker thread. */
     _decode(path) {
         return new Promise((resolve, reject) => {
             Gio.File.new_for_path(path).read_async(GLib.PRIORITY_DEFAULT,
@@ -316,8 +276,8 @@ export class BackdropMaker {
         });
     }
 
-    /* Drop all but the newest files, never the ones on screen: a backdrop
-     * written once and shown again later is old by its date. */
+    /* Drop all but the newest files, never the ones in use: a file written
+     * long ago and shown again is old by its date. */
     _prune() {
         const attributes = `${Gio.FILE_ATTRIBUTE_STANDARD_NAME},${Gio.FILE_ATTRIBUTE_TIME_MODIFIED}`;
         this._dir.enumerate_children_async(

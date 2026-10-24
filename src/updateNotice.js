@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-/* updateNotice.js
- *
- * A one-off notification after an update, saying what the new version brings.
- * The release it last announced is kept in `last-announced-version`, so it is
- * shown once — not again at every login or unlock, both of which re-enable the
- * extension.
- */
+/* updateNotice.js: a one-off "what's new" notification after an update.
+ * `last-announced-version` keeps it from repeating, since every login and
+ * unlock re-enables the extension. */
 
 import GLib from 'gi://GLib';
 
@@ -13,8 +9,8 @@ import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js'
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 
-/* The release the notes below describe. Bump both together for a release worth
- * announcing; a release that leaves them alone stays quiet. */
+/* Bump together with releaseNotes() to announce a release; leave both alone
+ * and the release stays quiet. */
 const RELEASE = '3.2';
 
 function releaseNotes() {
@@ -28,10 +24,6 @@ function releaseNotes() {
 const DELAY_SECONDS = 5;
 
 export class UpdateNotice {
-    /**
-     * @param {object} extension the Extension, for its name and preferences
-     * @param {object} settings the extension's Gio.Settings
-     */
     constructor(extension, settings) {
         this._extension = extension;
         this._settings = settings;
