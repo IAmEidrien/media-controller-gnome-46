@@ -14,6 +14,7 @@ import { gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.j
 import { Slider } from 'resource:///org/gnome/shell/ui/slider.js';
 
 import { cssUrl } from './artCache.js';
+import { BackdropMaker } from './backdrop.js';
 import { boxOrientation } from './compat.js';
 import { Equalizer } from './equalizer.js';
 import { LyricsPanel, lyricsIcon } from './lyricsPanel.js';
@@ -39,6 +40,9 @@ const LIST_GAP = 6;
 const LIST_INSET = 10;
 const LIST_SLIDE = 12;
 const LIST_MS = 180;
+
+/* How long one track's backdrop takes to fade into the next. */
+const BACKDROP_MS = 500;
 
 /* Keyed by the `card-art-size` enum nick. `icon` sizes the fallback player icon
  * so it keeps roughly the same inset as the artwork it stands in for, and the
@@ -171,16 +175,22 @@ export const MediaCard = GObject.registerClass({
         'open-preferences': {},
         /* A player was picked from the list; carries its MPRIS bus name. */
         'player-selected': {param_types: [GObject.TYPE_STRING]},
+        /* The backdrop came or went; carries the color along its edge as CSS,
+         * or an empty string for the plain card. */
+        'backdrop-changed': {param_types: [GObject.TYPE_STRING]},
     },
 }, class MediaCard extends St.Widget {
     _init(artCache, lyricsSource, settings) {
-        /* Two layers: the card's content, and above it the player list with
-         * the scrim behind it, which float over the content when open. */
+        /* Three layers: the backdrop made from the album art, the card's
+         * content over it, and above that the player list with the scrim
+         * behind it, which float over the content when open. */
         super._init({
             style_class: 'mc-card',
             layout_manager: new Clutter.BinLayout(),
             x_expand: true,
         });
+
+        this._buildBackdrop();
 
         /* Held to the top at its own height. Filling a card that is briefly
          * taller than it would stretch the header, whose action column
@@ -210,6 +220,9 @@ export const MediaCard = GObject.registerClass({
         this._artGeneration = 0;
         this._artPath = null;
         this._artSize = ART_SIZES[DEFAULT_ART_SIZE];
+        this._backdropMaker = new BackdropMaker();
+        this._backdropGeneration = 0;
+        this._backdropPath = null;
         this._length = 0;
         this._position = 0;
         this._players = [];
@@ -237,11 +250,114 @@ export const MediaCard = GObject.registerClass({
             this._settings.connect('changed::card-width', () => this._applyWidth()),
             this._settings.connect('changed::lyrics-height', () => this._applyLyricsHeight()),
             this._settings.connect('changed::card-art-size', () => this._applyArtSize()),
+            this._settings.connect('changed::card-art-backdrop',
+                () => this._onBackdropSettingChanged()),
         ];
         this._applyWidth();
         this._applyArtSize();
 
         this.connect('destroy', () => this._onDestroy());
+    }
+
+    /* Two images, so a new track's backdrop can fade in over the last one, and
+     * a sheen over both, lighter at the top like light falling on glass. None
+     * of them asks for room: the content alone sizes the card, and they fill
+     * whatever it comes to. */
+    _buildBackdrop() {
+        this._backdropLayers = [0, 1].map(() => new St.Widget({
+            style_class: 'mc-card-backdrop',
+            x_expand: true,
+            y_expand: true,
+        }));
+        this._sheen = new St.Widget({
+            style_class: 'mc-card-sheen',
+            x_expand: true,
+            y_expand: true,
+        });
+
+        for (const layer of [...this._backdropLayers, this._sheen])
+            this.add_child(layer);
+    }
+
+    /* Art the card already holds is enough to build from. With the artwork
+     * hidden, though, it was never fetched, so the track's art is asked for
+     * again. */
+    _onBackdropSettingChanged() {
+        if (this._artPath || !this._settings.get_boolean('card-art-backdrop')) {
+            this._updateBackdrop();
+            return;
+        }
+        this._currentArtUrl = null;
+        this.sync();
+    }
+
+    /* Builds the backdrop for the art the card holds. With no art yet it
+     * leaves the last one up: the art may still be on its way, and the paths
+     * that know there is none drop it themselves. */
+    _updateBackdrop() {
+        if (!this._settings.get_boolean('card-art-backdrop')) {
+            this._dropBackdrop();
+            return;
+        }
+        if (!this._artPath)
+            return;
+
+        /* A newer track must win even if its backdrop is done first. */
+        const generation = ++this._backdropGeneration;
+        this._backdropMaker.make(this._artPath).then(backdrop => {
+            if (generation === this._backdropGeneration)
+                this._showBackdrop(backdrop);
+        });
+    }
+
+    _dropBackdrop() {
+        this._backdropGeneration++;
+        this._showBackdrop(null);
+    }
+
+    /**
+     * Fade to a new backdrop, or away to the plain card.
+     *
+     * @param {{path: string, color: string}|null} backdrop what
+     *   BackdropMaker.make() resolved to
+     */
+    _showBackdrop(backdrop) {
+        const path = backdrop?.path ?? null;
+        if (path === this._backdropPath)
+            return;
+        this._backdropPath = path;
+
+        /* A new image always arrives on the upper layer. The one on screen
+         * moves underneath first, so the fade starts from it rather than from
+         * the plain card. Removing a transition does not run its onComplete,
+         * so a fade cut short cannot clear the layer it no longer owns. */
+        const [lower, upper] = this._backdropLayers;
+        lower.remove_all_transitions();
+        upper.remove_all_transitions();
+        if (upper.style) {
+            lower.style = upper.style;
+            lower.opacity = 255;
+        }
+
+        const style = path ? `background-image: ${cssUrl(path)};` : null;
+        upper.style = style;
+        upper.opacity = 0;
+
+        const fade = {
+            duration: BACKDROP_MS,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            onComplete: () => {
+                lower.style = null;
+            },
+        };
+        if (path)
+            upper.ease({opacity: 255, ...fade});
+        else
+            lower.ease({opacity: 0, ...fade});
+
+        /* The list is a sheet of the same glass. */
+        this._playerList.style = style;
+        this.emit('backdrop-changed', backdrop?.color ?? '');
     }
 
     /**
@@ -958,10 +1074,13 @@ export const MediaCard = GObject.registerClass({
         const showArt = this._settings.get_boolean('card-show-art');
         this._artButton.visible = showArt;
 
-        /* Forget the current art while hidden, so re-enabling the setting on the
-         * same track resolves it again instead of short-circuiting below. */
-        if (!showArt || !player) {
+        /* Forget the current art while nothing uses it, so re-enabling a
+         * setting on the same track resolves it again instead of
+         * short-circuiting below. The backdrop is made from the art, so it is
+         * still fetched while the artwork itself is hidden. */
+        if (!(showArt || this._settings.get_boolean('card-art-backdrop')) || !player) {
             this._clearArt();
+            this._dropBackdrop();
             return;
         }
 
@@ -981,15 +1100,25 @@ export const MediaCard = GObject.registerClass({
         const generation = this._artGeneration;
         this._setFallbackIcon(player);
 
-        if (!url)
+        /* Until the new art is in, the backdrop stays on the last track's
+         * rather than flashing the plain card between the two. Only a track
+         * known to have none drops it. */
+        if (!url) {
+            this._dropBackdrop();
             return;
+        }
 
         this._artCache.resolve(url).then(path => {
-            if (generation !== this._artGeneration || !path)
+            if (generation !== this._artGeneration)
                 return;
+            if (!path) {
+                this._dropBackdrop();
+                return;
+            }
             this._artPath = path;
             this._applyArtStyle();
             this._artFallback.visible = false;
+            this._updateBackdrop();
         });
     }
 
@@ -1109,9 +1238,11 @@ export const MediaCard = GObject.registerClass({
     }
 
     _onDestroy() {
-        /* Orphans any in-flight art download: its callback checks the
-         * generation and finds it stale. */
+        /* Orphans any in-flight art download or backdrop: their callbacks
+         * check the generation and find it stale. */
         this._artGeneration++;
+        this._backdropGeneration++;
+        this._backdropMaker.destroy();
 
         if (this._timeoutId) {
             GLib.Source.remove(this._timeoutId);

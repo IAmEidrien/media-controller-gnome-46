@@ -15,11 +15,12 @@ import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 
 /* The release the notes below describe. Bump both together for a release worth
  * announcing; a release that leaves them alone stays quiet. */
-const RELEASE = '3.1';
+const RELEASE = '3.2';
 
 function releaseNotes() {
     return [
-        _('The card follows the shell’s light style: it turns light when the shell does, and stays dark as before otherwise.'),
+        _('Colors from album art: the card fills with a dark, frosted-glass backdrop blurred from the artwork, and fades to each new track’s colors.'),
+        _('It is on by default, in the light and dark style alike, and can be switched off under Card in the preferences.'),
     ].map(line => `• ${line}`).join('\n');
 }
 

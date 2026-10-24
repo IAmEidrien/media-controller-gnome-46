@@ -7,7 +7,7 @@ ZIP     = $(UUID).shell-extension.zip
 # reused across runs, since building it hits the network.
 SHEXLI_VENV = .shexli-venv
 SOURCES = $(SRC)/extension.js $(SRC)/prefs.js $(SRC)/mpris.js $(SRC)/mediaCard.js \
-          $(SRC)/artCache.js $(SRC)/playerIcons.js $(SRC)/scrollingLabel.js \
+          $(SRC)/artCache.js $(SRC)/backdrop.js $(SRC)/playerIcons.js $(SRC)/scrollingLabel.js \
           $(SRC)/transport.js $(SRC)/paths.js $(SRC)/equalizer.js \
           $(SRC)/compat.js $(SRC)/lyrics.js $(SRC)/lyricsPanel.js \
           $(SRC)/playerList.js \
@@ -79,6 +79,7 @@ pack: schemas
 		--extra-source=mpris.js \
 		--extra-source=mediaCard.js \
 		--extra-source=artCache.js \
+		--extra-source=backdrop.js \
 		--extra-source=playerIcons.js \
 		--extra-source=scrollingLabel.js \
 		--extra-source=transport.js \

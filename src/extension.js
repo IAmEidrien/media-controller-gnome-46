@@ -66,6 +66,8 @@ class MediaIndicator extends PanelMenu.Button {
         this._settings = settings;
         this._manager = manager;
         this._orderApplied = null;
+        /* Whether the card wears its backdrop made from the album art. */
+        this._glass = false;
         this._readSettings();
 
         this.add_style_class_name('mc-panel-button');
@@ -92,7 +94,8 @@ class MediaIndicator extends PanelMenu.Button {
             /* The menu deliberately stays open: switching players is something
              * you do to look at the other player. */
             'player-selected', (_card, busName) =>
-                this._manager.selectPlayer(busName), this);
+                this._manager.selectPlayer(busName),
+            'backdrop-changed', (_card, color) => this._syncBackdrop(color), this);
 
         this.menu.box.add_style_class_name('mc-card-menu');
 
@@ -137,12 +140,35 @@ class MediaIndicator extends PanelMenu.Button {
     }
 
     /* Everything the card draws, the player list included, sits inside the
-     * menu box, so the one class there switches the whole card's palette. */
+     * menu box, so the one class there switches the whole card's palette. The
+     * backdrop made from the album art is dark glass in either style, so the
+     * card keeps the dark palette while it wears one. */
     _syncStyleVariant() {
-        if (Main.getStyleVariant() === 'light')
+        if (Main.getStyleVariant() === 'light' && !this._glass)
             this.menu.box.add_style_class_name('mc-light');
         else
             this.menu.box.remove_style_class_name('mc-light');
+    }
+
+    /**
+     * The card paints its own backdrop, and `.mc-glass` restyles its controls
+     * to sit on it. The menu box shows only along the antialiased edge of the
+     * rounded corners and under the border, so it takes the backdrop's edge
+     * color there rather than the plain card's.
+     *
+     * @param {string} color the backdrop's edge color, or '' for none
+     */
+    _syncBackdrop(color) {
+        const box = this.menu.box;
+        this._glass = !!color;
+        if (color) {
+            box.add_style_class_name('mc-glass');
+            box.style = `background-color: ${color};`;
+        } else {
+            box.remove_style_class_name('mc-glass');
+            box.style = null;
+        }
+        this._syncStyleVariant();
     }
 
     /* The shell keeps a menu inside the work area, less the menu's margins; the

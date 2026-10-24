@@ -28,6 +28,13 @@ Rhythmbox, mpv, and so on.
 </p>
 <p align="center"><em>The panel indicator and the now-playing card.</em></p>
 
+## What's new in 3.2
+
+- **Colors from album art**: the card fills with a dark, frosted-glass backdrop
+  blurred from the artwork, in the shell's light and dark style alike, and
+  fades to each new track's colors. On by default; switch it off under Card in
+  the preferences for the plain card.
+
 ## What's new in 3.1
 
 - **Light card**: the card follows the shell's light style, turning white with
@@ -88,9 +95,16 @@ Rhythmbox, mpv, and so on.
   line by line and follow the song; clicking a line plays from there. The button
   only appears for music players — not for browsers, nor for films in video
   players.
+- **Colors from album art**, on by default: the card fills with a frosted-glass
+  backdrop blurred from the album art, and fades from one track's colors to the
+  next. It is the same dark glass in the shell's light and dark style alike:
+  the controls turn white to sit on it, and the player list becomes a sheet of
+  the same glass. Tracks without artwork keep the plain card, as does switching
+  the option off.
 - **Configurable panel position**: far left, left, center, right, or far right.
 - Follows the shell theme: the card is light in the shell's light style and
-  dark in its dark style, and wears your accent color in both.
+  dark in its dark style, and wears your accent color in both. With colors from
+  album art, it is the artwork's dark glass in both instead.
 
 Skip buttons only appear for players that support seeking; shuffle and loop
 only for players that expose them over MPRIS. The volume bar sets the player's
@@ -157,6 +171,7 @@ in on Wayland, because the shell caches ES modules for the life of the process.
 | `hide-when-inactive`                              | on              | Hide the indicator when no player is running            |
 | `card-show-art`                                   | on              | Album art in the card                                   |
 | `card-art-size`                                   | `large`         | `small`, `medium` or `large`: 80, 104 or 136 pixels     |
+| `card-art-backdrop`                               | on              | Frosted backdrop blurred from the album art, behind the card |
 | `card-show-player-switcher`                       | on              | Player button beside the volume bar, listing every player to switch to |
 | `pause-others-on-play`                            | on              | Starting one player pauses whichever other was playing  |
 | `card-show-seek-bar`                              | on              | Seek bar in the card                                    |
@@ -182,11 +197,12 @@ in on Wayland, because the shell caches ES modules for the life of the process.
 | [src/mpris.js](src/mpris.js)                   | MPRIS2 D-Bus client and player tracking     |
 | [src/playerIcons.js](src/playerIcons.js)       | Matches a player to its app: icon, name, kind |
 | [src/artCache.js](src/artCache.js)             | Resolves and caches album art               |
+| [src/backdrop.js](src/backdrop.js)             | Blurs album art into the card's backdrop    |
 | [src/prefs.js](src/prefs.js)                   | Preferences window                          |
 | [src/compat.js](src/compat.js)                 | Differences between GNOME Shell versions    |
 | [src/updateNotice.js](src/updateNotice.js)     | What's-new notification after an update     |
 
-`mpris.js`, `artCache.js` and `lyrics.js` deliberately import only `gi://`
+`mpris.js`, `artCache.js`, `backdrop.js` and `lyrics.js` deliberately import only `gi://`
 modules, never `resource:///org/gnome/shell/…`, so they can be exercised outside
 the shell.
 
@@ -205,7 +221,9 @@ This is the license required for submission to
 ## Notes
 
 Album art from streaming players and browsers arrives as an `https://` URL. It is
-downloaded once and cached under `~/.cache/media-controls/art/`.
+downloaded once and cached under `~/.cache/media-controls/art/`. The card's
+backdrops are small images made from that art, kept under
+`~/.cache/media-controls/backdrops/`: the last sixteen, the rest removed.
 
 Players that do not report a track length (most web players) simply do not show a
 seek bar. `playerctld` is ignored, since it mirrors another player that is

@@ -137,6 +137,12 @@
       <description>Only has an effect while card-show-art is set. The fallback player icon scales to match.</description>
     </key>
 
+    <key name="card-art-backdrop" type="b">
+      <default>true</default>
+      <summary>Fill the card with a frosted backdrop made from the album art</summary>
+      <description>The artwork is blurred into fields of color behind the card's text and controls, and darkened beneath them. The card stays dark glass in both the light and the dark style. Tracks without artwork keep the plain card. Works whether or not card-show-art is set.</description>
+    </key>
+
     <key name="pause-others-on-play" type="b">
       <default>true</default>
       <summary>Only let one player play at a time</summary>

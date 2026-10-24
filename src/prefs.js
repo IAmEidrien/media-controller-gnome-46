@@ -192,6 +192,9 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
         appearance.add(this._bindSensitive(settings, 'card-show-art',
             this._comboRow(settings, 'card-art-size', _('Album art size'),
                 ART_SIZES, artSizeLabels())));
+        appearance.add(this._switchRow(settings, 'card-art-backdrop',
+            _('Colors from album art'),
+            _('Fill the card with a dark frosted-glass backdrop blurred from the album art, in both the light and the dark style. When off, or for tracks without artwork, the card keeps its plain background.')));
         appearance.add(this._spinRow(settings, 'card-width',
             _('Card width'), _('Measured in pixels.'), 400, 560, 10));
         page.add(appearance);

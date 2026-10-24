@@ -9,6 +9,10 @@
  * stylesheet-light.css instead, but St only ranks an extension's rules above
  * the shell theme in the file it loads, not in one that file @imports, so the
  * variants could not share the rules below without copying all of them.
+ *
+ * A third set, under `.mc-glass` at the very end, restyles the dark palette
+ * for the backdrop made from the album art, which the card wears as the same
+ * dark glass in either style.
  */
 
 /* ---------- Panel indicator ---------- */
@@ -77,6 +81,18 @@
  * item dark, and the whole card is one menu item. */
 .mc-card {
   color: #ffffff;
+}
+
+/* The backdrop made from the album art, and the sheen over it. The radius is
+ * the menu's own, less its border, like the scrim's. The images are set
+ * inline; the sheen stays clear until `.mc-glass` is set. */
+.mc-card-backdrop {
+  border-radius: 19px;
+  background-size: cover;
+}
+
+.mc-card-sheen {
+  border-radius: 19px;
 }
 
 /* The padding is the content's, not the card's, so the scrim behind the player
@@ -662,4 +678,136 @@
 .mc-light .mc-player-row-active:hover,
 .mc-light .mc-player-row-active:focus {
   background-color: rgba(34, 34, 38, 0.14);
+}
+
+/* ---------- Glass ---------- */
+
+/* Applies under `.mc-glass`, set on the menu while the card wears a backdrop
+ * made from the album art. The backdrop is dark in either style, so the menu
+ * drops `.mc-light` meanwhile and these build on the dark palette. The artwork
+ * brings the color now, so the accent color gives way to white, and the
+ * shell's solid greys give way to translucent fills the backdrop shows
+ * through, like frosted glass. The text needs nothing: the backdrop is
+ * darkened until the dark palette reads on it. */
+
+/* The menu's background, under this border, is set inline to the color along
+ * the backdrop's edge. */
+.mc-card-menu.mc-glass {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+/* Light from above: a little brighter at the top, a little deeper at the
+ * bottom, where the controls sit. */
+.mc-glass .mc-card-sheen {
+  background-gradient-direction: vertical;
+  background-gradient-start: rgba(255, 255, 255, 0.08);
+  background-gradient-end: rgba(0, 0, 0, 0.14);
+}
+
+/* The artwork lifts off the glass. */
+.mc-glass .mc-art {
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 8px 24px 0 rgba(0, 0, 0, 0.4);
+}
+
+.mc-glass .mc-art:hover,
+.mc-glass .mc-art:focus {
+  border-color: rgba(255, 255, 255, 0.8);
+}
+
+.mc-glass .mc-app-button:hover {
+  background-color: rgba(255, 255, 255, 0.14);
+}
+
+/* Open lyrics, and engaged shuffle and loop below: a lit pill behind a
+ * full-strength icon, since a white icon alone would look like any other. */
+.mc-glass .mc-lyrics-button:checked {
+  background-color: rgba(255, 255, 255, 0.18);
+}
+
+.mc-glass .mc-lyrics-button:checked StIcon {
+  color: #ffffff;
+}
+
+.mc-glass .mc-eq-bar {
+  background-color: rgba(255, 255, 255, 0.85);
+}
+
+.mc-glass .mc-lyrics-line:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.mc-glass .mc-card .mc-seek,
+.mc-glass .mc-card .mc-seek:hover,
+.mc-glass .mc-card .mc-volume,
+.mc-glass .mc-card .mc-volume:hover {
+  color: #ffffff;
+  -barlevel-background-color: rgba(255, 255, 255, 0.22);
+  -barlevel-active-background-color: rgba(255, 255, 255, 0.9);
+}
+
+.mc-glass .mc-time {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.mc-glass .mc-card .message-media-control:hover {
+  background-color: rgba(255, 255, 255, 0.14);
+}
+
+.mc-glass .mc-card .message-media-control:active {
+  background-color: rgba(255, 255, 255, 0.22);
+}
+
+.mc-glass .mc-card .message-media-control:insensitive {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.mc-glass .mc-mode-button StIcon {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.mc-glass .mc-mode-on StIcon {
+  color: #ffffff;
+}
+
+/* After the hover rule, which it has to outrank on an engaged button. */
+.mc-glass .mc-card .mc-mode-on {
+  background-color: rgba(255, 255, 255, 0.18);
+}
+
+.mc-glass .mc-card .mc-mode-on:hover {
+  background-color: rgba(255, 255, 255, 0.26);
+}
+
+.mc-glass .mc-card-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.mc-glass .mc-player-picker {
+  background-color: rgba(255, 255, 255, 0.14);
+}
+
+.mc-glass .mc-player-picker:hover,
+.mc-glass .mc-player-picker:focus {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.mc-glass .mc-player-picker:active,
+.mc-glass .mc-player-picker:checked {
+  background-color: rgba(255, 255, 255, 0.26);
+}
+
+.mc-glass .mc-player-picker:insensitive {
+  background-color: transparent;
+}
+
+/* The list carries the card's backdrop as its own background-image, set
+ * inline: a sheet of the same glass, lifted off the dimmed card. */
+.mc-glass .mc-player-list {
+  background-size: cover;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.mc-glass .mc-player-row-check {
+  color: #ffffff;
 }

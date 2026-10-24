@@ -14,3 +14,9 @@ export function artCacheDir() {
     return Gio.File.new_for_path(GLib.build_filenamev(
         [GLib.get_user_cache_dir(), 'media-controls', 'art']));
 }
+
+/** @returns {Gio.File} the directory the card's blurred backdrops are written to */
+export function backdropCacheDir() {
+    return Gio.File.new_for_path(GLib.build_filenamev(
+        [GLib.get_user_cache_dir(), 'media-controls', 'backdrops']));
+}
