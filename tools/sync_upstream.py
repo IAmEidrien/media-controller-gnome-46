@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 import re
 import subprocess
+import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 UUID = 'media-controller-gnome-46@eidrien.local'
@@ -140,4 +141,11 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except RuntimeError as error:
+        # Put deliberate compatibility stops in the job annotations. Keep the
+        # exit status nonzero so no unvalidated merge is ever published.
+        message = str(error).replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+        print(f'::error title=Upstream sync needs review::{message}', flush=True)
+        sys.exit(1)
