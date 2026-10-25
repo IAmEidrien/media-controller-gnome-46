@@ -1,0 +1,31 @@
+name: Promote testing
+on:
+  push:
+    branches: [testing]
+  schedule:
+    - cron: '29 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: write
+  statuses: read
+concurrency:
+  group: testing-promotion
+  cancel-in-progress: false
+jobs:
+  promote:
+    if: github.repository == 'IAmEidrien/media-controller-gnome-46'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      # Always execute the trusted release-branch controller, never candidate code.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            await require('./.github/scripts/promote.cjs').main({github, context, core});

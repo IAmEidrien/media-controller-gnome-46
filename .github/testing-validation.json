@@ -1,0 +1,10 @@
+{
+  "commands": [
+    [
+      "make",
+      "check",
+      "pack"
+    ]
+  ],
+  "generic_package": false
+}

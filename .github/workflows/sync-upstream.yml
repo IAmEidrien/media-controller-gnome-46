@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  actions: write
+  actions: write
 
 concurrency:
   group: upstream-sync
@@ -21,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
-          ref: main
+          ref: testing
           fetch-depth: 0
           persist-credentials: false
       - name: Install check tools
@@ -45,8 +47,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           git commit -m "Merge upstream into GNOME 46 fork"
-          # A normal push rejects a concurrently updated main; never force it.
-          git -c credential.helper='!gh auth git-credential' push origin HEAD:main
+          # A normal push rejects a concurrently updated testing; never force it.
+          git -c credential.helper='!gh auth git-credential' push origin HEAD:testing
+      - name: Validate the bot push and start its quiet period
+        if: steps.merge.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run testing-ci.yml --ref testing
+      - name: Validate the bot push and start its quiet period
+        if: steps.merge.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run testing-ci.yml --ref testing
       - name: Result
         if: always()
         env:
@@ -54,7 +66,7 @@ jobs:
           CHANGED: ${{ steps.merge.outputs.changed }}
         run: |
           if [ "$RESULT" = success ] && [ "$CHANGED" = true ]; then
-            echo 'Upstream merge passed checks and was published to main.' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Upstream merge passed checks and was published to testing.' >> "$GITHUB_STEP_SUMMARY"
           elif [ "$RESULT" = success ]; then
             echo 'Upstream is already included; no commit was made.' >> "$GITHUB_STEP_SUMMARY"
           else

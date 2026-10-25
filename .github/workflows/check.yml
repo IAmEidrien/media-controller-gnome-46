@@ -2,7 +2,7 @@ name: GNOME 46 checks
 
 on:
   push:
-    branches: [main]
+    branches: [main, testing]
   pull_request:
   workflow_dispatch:
 
