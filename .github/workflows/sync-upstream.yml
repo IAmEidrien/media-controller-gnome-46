@@ -8,7 +8,6 @@ on:
 permissions:
   contents: write
   actions: write
-  actions: write
 
 concurrency:
   group: upstream-sync
@@ -49,11 +48,6 @@ jobs:
           git commit -m "Merge upstream into GNOME 46 fork"
           # A normal push rejects a concurrently updated testing; never force it.
           git -c credential.helper='!gh auth git-credential' push origin HEAD:testing
-      - name: Validate the bot push and start its quiet period
-        if: steps.merge.outputs.changed == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run testing-ci.yml --ref testing
       - name: Validate the bot push and start its quiet period
         if: steps.merge.outputs.changed == 'true'
         env:

@@ -7,7 +7,9 @@ Users who want released changes continue pulling `main`.
 The promotion controller opens one `testing` → `main` pull request while changes
 are pending. It checks hourly and merges only after **72 hours without a new
 testing push**, successful Testing CI and other push CI/statuses for the current
-head, and a clean merge. The timer uses GitHub's server-side workflow creation
+head, and a conflict-free merge. Duplicate PR runs held by GitHub for bot
+approval do not replace the mandatory push validation; GitHub still enforces
+required branch rules at merge time. The timer uses GitHub's server-side workflow creation
 time, never author/committer dates. A force-push back to an old SHA still restarts
 the timer. Do not force-push shared branches as part of the normal workflow.
 

@@ -7,14 +7,17 @@ daily at 09:23 UTC. It can also be started with **Actions → Sync upstream into
 GNOME 46 fork → Run workflow**. It uses standard Ubuntu 24.04 runners, which
 are free for public repositories; no personal access token or paid plan is
 needed. If Actions are disabled for the fork, enable them in GitHub's Actions
-tab once. The workflow requests `contents: write` for its normal push.
+tab once. The workflow requests `contents: write` for its normal push and `actions: write`
+to dispatch validation of the resulting testing commit.
 
 An eligible update is merged with ordinary Git ancestry, preserving the
 directly installable repository root and the fork's UUID, GNOME 46 declaration,
 settings and added features. Upstream version-only metadata changes receive a
 fork version name such as `2.5-gnome46.auto.abcdef0`. The candidate must pass
-`make check`, `make pack` and the compatibility guards before it reaches `main`.
-Gitpulsar Pull can then update the installed checkout as usual. There is no
+`make check`, `make pack` and the compatibility guards before it reaches `testing`.
+It then enters the 72-hour promotion process described in
+[TESTING-WORKFLOW.md](TESTING-WORKFLOW.md). Once promoted to `main`,
+Gitpulsar Pull can update the released checkout as usual. There is no
 force-push or replacement of local personal settings.
 
 Conflicting runtime edits, build/layout changes, new GI/resource imports,

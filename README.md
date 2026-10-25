@@ -102,8 +102,9 @@ enabling it sends track information when the lyrics panel is opened.
   blue as fallback and an optional Shell CSS override.
 - **Optional Git update helper**: compile schema changes and offer a logout
   confirmation after Pull. The extension works independently of the helper.
-- **Guarded upstream syncing**: scheduled merges reach `main` only after the
-  fork's compatibility guards and automated checks pass.
+- **Guarded upstream syncing**: scheduled merges enter `testing` after the
+  fork's compatibility guards and automated checks pass. Promotion to `main`
+  then requires 72 quiet hours; see [TESTING-WORKFLOW.md](TESTING-WORKFLOW.md).
 - Uses Shell media-button and slider styles.
 
 Skip buttons only appear for players that support seeking; shuffle and loop

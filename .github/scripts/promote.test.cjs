@@ -26,6 +26,11 @@ test('additional push CI and commit statuses cannot be ignored',()=>{
  assert.match(decision(fixture({extraRuns:[{status:'completed',conclusion:'failure'}]})),/Additional/);
  assert.match(decision(fixture({statuses:[{state:'pending'}]})),/status/);
 });
+test('duplicate PR approval holds do not replace successful push CI',()=>{
+ assert.equal(decision(fixture({pr:{...pr,mergeable_state:'unstable'}})),null);
+ assert.match(decision(fixture({pr:{...pr,mergeable_state:'unstable'},run:{...run,conclusion:'failure'}})),/validation/);
+ assert.match(decision(fixture({pr:{...pr,mergeable_state:'blocked'}})),/clean/);
+});
 test('closed, draft, changed and conflicting PRs block',()=>{
  for(const p of [{...pr,state:'closed'},{...pr,draft:true},{...pr,head:{sha:'new'}},{...pr,mergeable:false},{...pr,mergeable_state:'behind'}])
   assert.ok(decision(fixture({pr:p})));

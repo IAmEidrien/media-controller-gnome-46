@@ -21,7 +21,10 @@ function decision({pr, sha, run, now = Date.now(), extraRuns = [], statuses = []
     if (run.status !== 'completed' || run.conclusion !== 'success') return 'Required validation has not passed';
     if (extraRuns.some(r => r.status !== 'completed' || r.conclusion !== 'success')) return 'Additional push CI has not passed';
     if (statuses.some(s => s.state !== 'success')) return 'Commit status has not passed';
-    if (pr.mergeable !== true || pr.mergeable_state !== 'clean') return 'Merge is not clean';
+    // GitHub can mark a PR unstable solely because its duplicate bot-created
+    // PR run awaits approval. Exact-head push CI is checked above. Required
+    // branch rules are still enforced by GitHub's merge endpoint.
+    if (pr.mergeable !== true || !['clean', 'unstable'].includes(pr.mergeable_state)) return 'Merge is not clean';
     return null;
 }
 
