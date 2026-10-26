@@ -202,6 +202,15 @@ export const MprisPlayer = GObject.registerClass({
         return this._playerProxy !== null;
     }
 
+    /* Running with nothing loaded: Chrome closed to the background, or VLC
+     * with an empty playlist (Firefox leaves the bus instead). The spec ties
+     * CanPlay to having a current track, and GNOME's own media controls hide
+     * players without it. Not the title: VLC keeps a removed track's metadata.
+     * The canPlay fallback keeps players that do not report it. */
+    get idle() {
+        return !this.isPlaying && !this.canPlay;
+    }
+
     /* Reading proxy.Metadata deep-unpacks the whole a{sv}, and one sync asks
      * for half a dozen keys, so it is unpacked once per PropertiesChanged. */
     _metadataDict() {
@@ -597,9 +606,10 @@ export const MprisManager = GObject.registerClass({
 
     /* Controllable players, oldest first: the map is in arrival order, so a
      * switcher short of room can drop the longest-idle ones. Players running
-     * at startup come in bus order, the closest thing available. */
-    get readyPlayers() {
-        return this.players.filter(player => player.ready);
+     * at startup come in bus order, the closest thing available. An idle
+     * player has nothing to control. */
+    get controllablePlayers() {
+        return this.players.filter(player => player.ready && !player.idle);
     }
 
     /* Show this player, whatever else is playing. The pin holds against
@@ -734,7 +744,8 @@ export const MprisManager = GObject.registerClass({
      * boundary. */
     _rosterSignature() {
         return JSON.stringify(this.players.map(player =>
-            [player.busName, player.ready, player.identity, player.desktopEntry]));
+            [player.busName, player.ready, player.idle, player.identity,
+                player.desktopEntry]));
     }
 
     _notifyRoster() {
@@ -778,7 +789,8 @@ export const MprisManager = GObject.registerClass({
 
     /* A pinned player wins outright. Otherwise prefer one that is playing, and
      * else keep the current one so the panel does not jump around when a
-     * background player updates its metadata. */
+     * background player updates its metadata. An idle player is never picked,
+     * so with nothing else around the UI shows no player at all. */
     _selectActive() {
         const previous = this._active;
         const pinned = this._pinned ? this._players.get(this._pinned) : null;
@@ -787,17 +799,20 @@ export const MprisManager = GObject.registerClass({
         if (!pinned)
             this._pinned = null;
 
-        if (pinned) {
+        /* An idle pin is set aside, not cleared: it wins again once the
+         * player has media back. */
+        if (pinned && !pinned.idle) {
             this._active = pinned;
         } else {
-            if (!this._active || !this._players.has(this._active.busName))
+            const current = this._active;
+            if (!current || !this._players.has(current.busName) || current.idle)
                 this._active = null;
 
             if (!this._active?.isPlaying)
                 this._active = this._find(p => p.isPlaying) ?? this._active;
 
             if (!this._active || !this._players.has(this._active.busName))
-                this._active = this._find(p => p.ready);
+                this._active = this._find(p => p.ready && !p.idle);
         }
 
         if (previous !== this._active)

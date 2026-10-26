@@ -340,8 +340,9 @@ class MediaIndicator extends PanelMenu.Button {
         const player = this._manager.activePlayer;
         const prefs = this._prefs;
         this._card.setPlayer(player);
-        /* Only players whose proxy has landed can be controlled. */
-        this._card.setPlayers(this._manager.readyPlayers, player);
+        /* Only players whose proxy has landed, with media loaded, can be
+         * controlled. */
+        this._card.setPlayers(this._manager.controllablePlayers, player);
 
         if (!player) {
             /* Cleared first, so no scroll is left pending on a hidden label. */
