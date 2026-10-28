@@ -22,6 +22,10 @@ const IGNORED_BUS_NAMES = ['org.mpris.MediaPlayer2.playerctld'];
  * nothing a year or longer is a real track. */
 const MAX_TRACK_LENGTH = 365 * 24 * 3600 * 1000000;
 
+/* How long after a sound output switch a player that pauses is taken to have
+ * been paused by the switch; WirePlumber does it within half a second. */
+const KEEP_PLAYING_US = 3 * 1000000;
+
 const DBusIface = `
 <node>
   <interface name="org.freedesktop.DBus">
@@ -415,6 +419,12 @@ export const MprisPlayer = GObject.registerClass({
         this._call('PlayPause');
     }
 
+    play() {
+        if (!this.canPlay)
+            return;
+        this._call('Play');
+    }
+
     /* Pause, not PlayPause: a player that stopped before the call lands would
      * otherwise be restarted, the opposite of getting out of the way. */
     pause() {
@@ -574,6 +584,8 @@ export const MprisManager = GObject.registerClass({
         this._pinned = null;
         this._roster = '';
         this._statuses = new Map();
+        /* From keepPlaying(), by bus name: {deadline, resumed}. */
+        this._keepPlaying = new Map();
         this._loaded = false;
         this._cancellable = new Gio.Cancellable();
 
@@ -626,6 +638,20 @@ export const MprisManager = GObject.registerClass({
 
         this._active = player;
         this.emit('changed');
+    }
+
+    /* Call just before switching the sound output. A switch can take away the
+     * device the music was playing on (on cards that keep each output in its
+     * own profile, every switch does), and WirePlumber then pauses the
+     * players that were playing there, as it would for unplugged headphones.
+     * Whatever is playing now is resumed if it pauses soon after. */
+    keepPlaying() {
+        const deadline = GLib.get_monotonic_time() + KEEP_PLAYING_US;
+        this._keepPlaying.clear();
+        for (const player of this._players.values()) {
+            if (player.isPlaying)
+                this._keepPlaying.set(player.busName, {deadline, resumed: false});
+        }
     }
 
     _loadExistingPlayers() {
@@ -708,6 +734,9 @@ export const MprisManager = GObject.registerClass({
 
         this._statuses.set(player.busName, status);
 
+        if (this._carryOn(player, status))
+            return;
+
         if (status !== 'Playing')
             return;
 
@@ -720,6 +749,27 @@ export const MprisManager = GObject.registerClass({
          * everyone alone. */
         if (previous !== undefined)
             this._pauseOthers(player);
+    }
+
+    /* Whether a status change is an output switch's doing (see keepPlaying()).
+     * The pause is undone, once, so a pause pressed later stands. The Playing
+     * that follows is the player carrying on, not starting: it pauses no one
+     * and releases no pick. */
+    _carryOn(player, status) {
+        const hold = this._keepPlaying.get(player.busName);
+        if (!hold)
+            return false;
+        if (GLib.get_monotonic_time() > hold.deadline) {
+            this._keepPlaying.delete(player.busName);
+            return false;
+        }
+
+        if (status === 'Paused' && !hold.resumed) {
+            hold.resumed = true;
+            player.play();
+            return true;
+        }
+        return status === 'Playing';
     }
 
     _pauseOthers(player) {
@@ -768,6 +818,7 @@ export const MprisManager = GObject.registerClass({
         this._playerSignals.delete(busName);
         this._players.delete(busName);
         this._statuses.delete(busName);
+        this._keepPlaying.delete(busName);
 
         /* `_active` deliberately still points at the removed player:
          * _selectActive() compares against it to decide whether to emit
@@ -833,5 +884,6 @@ export const MprisManager = GObject.registerClass({
         this._active = null;
         this._pinned = null;
         this._statuses.clear();
+        this._keepPlaying.clear();
     }
 });

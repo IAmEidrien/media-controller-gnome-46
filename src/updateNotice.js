@@ -11,12 +11,12 @@ import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 
 /* Bump together with releaseNotes() to announce a release; leave both alone
  * and the release stays quiet. */
-const RELEASE = '3.2';
+const RELEASE = '3.4';
 
 function releaseNotes() {
     return [
-        _('Colors from album art: the card fills with a dark, frosted-glass backdrop blurred from the artwork, and fades to each new track’s colors.'),
-        _('It is on by default, in the light and dark style alike, and can be switched off under Card in the preferences.'),
+        _('Sound output: a button at the bottom right of the card shows where the sound is going, and switches between speakers, headphones, HDMI and Bluetooth, for every app at once.'),
+        _('What was playing keeps playing through the switch. The button can be hidden under Card in the preferences.'),
     ].map(line => `• ${line}`).join('\n');
 }
 

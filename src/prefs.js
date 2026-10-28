@@ -230,6 +230,9 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
         playback.add(this._switchRow(settings, 'card-show-volume',
             _('Volume bar'),
             _('Shown under the controls. Sets the volume of the player itself, not of the whole system. Requires a player that supports it; browsers do not.')));
+        playback.add(this._switchRow(settings, 'card-show-output-switcher',
+            _('Sound output button'),
+            _('Shown at the bottom right of the card while more than one output is available, such as speakers and headphones. Switches the output of the whole system, as the sound menu does, so every app moves to it.')));
         page.add(playback);
 
         const lyrics = new Adw.PreferencesGroup({

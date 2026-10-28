@@ -24,9 +24,17 @@ Rhythmbox, mpv, and so on.
 </p>
 
 <p align="center">
-  <img src="public/img-1.png" alt="The panel indicator and the now-playing card, showing album art, a seek bar and transport controls" width="700">
+  <img src="public/showcase.png" alt="Four views of the card: timed lyrics on an album-art backdrop, the frosted-glass backdrop in a track's colors, the player list in the dark style, and the sound output list in the light style" width="700">
 </p>
-<p align="center"><em>The panel indicator and the now-playing card.</em></p>
+<p align="center"><em>Synced lyrics, colors from the album art, and the player and sound output lists in the dark and light styles.</em></p>
+
+## What's new in 3.4
+
+- **Sound output**: a button at the bottom right of the card shows the output in
+  use and opens a list of your speakers, headphones, HDMI and Bluetooth devices
+  to switch between. It switches the whole system's output, as the sound menu
+  does, and what was playing keeps playing. Switch it off under Card in the
+  preferences.
 
 ## What's new in 3.2
 
@@ -69,9 +77,16 @@ Rhythmbox, mpv, and so on.
   remaining time, and large transport controls including skip buttons — with
   shuffle on the card's left edge and loop on its right, aligned with the
   controls. Along the bottom, under a hairline, the player's name sits beside a
-  volume bar in your accent color.
+  volume bar in your accent color, with the sound output at the end.
 - **Volume bar** that sets the player's own volume, by dragging, scrolling,
   clicking or with the arrow keys. It follows changes made in the player itself.
+- **Sound output** at the bottom right of the card: an icon for the output in
+  use — speakers, headphones, HDMI or Bluetooth — that opens a list of every
+  available output to switch to, named plainly: "Built-in" rather than the
+  chipset, and Bluetooth and USB devices by their own names. It switches the
+  system's output, as the sound menu does, so every app moves with it, browsers
+  included, and what was playing keeps playing. It appears once there is more
+  than one output to choose from.
 - **Player switching** when more than one player is running: clicking the
   player's name opens a list of every running player with its artwork and what
   it is playing. Picking one puts that player in the card and the panel. The
@@ -177,6 +192,7 @@ in on Wayland, because the shell caches ES modules for the life of the process.
 | `card-show-seek-buttons`                          | on              | Skip buttons in the card                                |
 | `card-show-shuffle` / `card-show-loop`            | on              | Shuffle and loop buttons on the card's edges            |
 | `card-show-volume`                                | on              | Volume bar under the card's controls, for the player's own volume |
+| `card-show-output-switcher`                       | on              | Sound output button at the card's bottom right, switching the system's output |
 | `card-show-lyrics-button`                         | on              | Lyrics button in the card, for music players            |
 | `lyrics-online-lookup`                            | off             | Ask LRCLIB when the player and `.lrc` files have none   |
 | `lyrics-height`                                   | 320             | Height of the lyrics in pixels (160–560), made shorter when the screen has no room |
@@ -190,7 +206,10 @@ in on Wayland, because the shell caches ES modules for the life of the process.
 | [src/extension.js](src/extension.js)           | Panel indicator, menu, panel placement      |
 | [src/mediaCard.js](src/mediaCard.js)           | The now-playing card                        |
 | [src/lyricsPanel.js](src/lyricsPanel.js)       | The card's lyrics view                      |
+| [src/cardList.js](src/cardList.js)             | The sheet the card's footer lists are built on |
 | [src/playerList.js](src/playerList.js)         | The card's list of players to switch to     |
+| [src/outputList.js](src/outputList.js)         | The card's list of sound outputs            |
+| [src/soundOutputs.js](src/soundOutputs.js)     | The system's sound outputs, and switching them |
 | [src/lyrics.js](src/lyrics.js)                 | Finds lyrics and parses LRC                 |
 | [src/scrollingLabel.js](src/scrollingLabel.js) | The fixed-width panel label and its marquee |
 | [src/mpris.js](src/mpris.js)                   | MPRIS2 D-Bus client and player tracking     |
@@ -201,9 +220,9 @@ in on Wayland, because the shell caches ES modules for the life of the process.
 | [src/compat.js](src/compat.js)                 | Differences between GNOME Shell versions    |
 | [src/updateNotice.js](src/updateNotice.js)     | What's-new notification after an update     |
 
-`mpris.js`, `artCache.js`, `backdrop.js` and `lyrics.js` deliberately import only `gi://`
-modules, never `resource:///org/gnome/shell/…`, so they can be exercised outside
-the shell.
+`mpris.js`, `artCache.js`, `backdrop.js`, `lyrics.js` and `soundOutputs.js` deliberately
+import only `gi://` modules, never `resource:///org/gnome/shell/…`, so they can be
+exercised outside the shell.
 
 ## Credits
 

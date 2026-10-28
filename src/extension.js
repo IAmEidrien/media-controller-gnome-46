@@ -17,6 +17,7 @@ import {LyricsSource} from './lyrics.js';
 import {MediaCard} from './mediaCard.js';
 import {MprisManager} from './mpris.js';
 import {ScrollingLabel} from './scrollingLabel.js';
+import {SoundOutputs} from './soundOutputs.js';
 import {UpdateNotice} from './updateNotice.js';
 import {loopIconName, nextLoopStatus, playPauseIconName, seekOffset,
     setReactive, setToggleStyle} from './transport.js';
@@ -59,7 +60,7 @@ const PANEL_KEYS = [
 
 const MediaIndicator = GObject.registerClass(
 class MediaIndicator extends PanelMenu.Button {
-    _init(extension, settings, artCache, lyricsSource, manager) {
+    _init(extension, settings, artCache, lyricsSource, manager, soundOutputs) {
         super._init(0.5, 'Media Controls');
 
         this._settings = settings;
@@ -83,7 +84,7 @@ class MediaIndicator extends PanelMenu.Button {
         this._buildTextBox();
         this._buildControls();
 
-        this._card = new MediaCard(artCache, lyricsSource, settings);
+        this._card = new MediaCard(artCache, lyricsSource, soundOutputs, settings);
         this._card.connectObject(
             'activated', () => this.menu.close(),
             'open-preferences', () => {
@@ -93,6 +94,11 @@ class MediaIndicator extends PanelMenu.Button {
             /* The menu stays open: you switch players to look at the other one. */
             'player-selected', (_card, busName) =>
                 this._manager.selectPlayer(busName),
+            /* The music carries on through the new output. */
+            'output-selected', (_card, id) => {
+                this._manager.keepPlaying();
+                soundOutputs.select(id);
+            },
             'backdrop-changed', (_card, color) => this._syncBackdrop(color), this);
 
         this.menu.box.add_style_class_name('mc-card-menu');
@@ -436,8 +442,9 @@ export default class MediaControlsExtension extends Extension {
         this._lyricsSource = new LyricsSource(this._userAgent());
         this._manager = new MprisManager();
         this._applyExclusivePlayback();
+        this._soundOutputs = new SoundOutputs();
         this._indicator = new MediaIndicator(this, this._settings, this._artCache,
-            this._lyricsSource, this._manager);
+            this._lyricsSource, this._manager, this._soundOutputs);
 
         const {box, index} = this._placement();
         Main.panel.addToStatusArea(ROLE, this._indicator, index, box);
@@ -514,6 +521,9 @@ export default class MediaControlsExtension extends Extension {
 
         this._manager?.destroy();
         this._manager = null;
+
+        this._soundOutputs?.destroy();
+        this._soundOutputs = null;
 
         this._artCache?.destroy();
         this._artCache = null;
