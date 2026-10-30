@@ -184,21 +184,43 @@ function fixture() {
     Object.assign(api, load('equalizer.js', ['Equalizer'], api));
     Object.assign(api, load('scrollingLabel.js', ['ScrollingLabel'], api));
     Object.assign(api, load('artCache.js', ['cssUrl'], api));
+    Object.assign(api, load('cardList.js', ['CardList'], api));
     Object.assign(api, load('playerList.js', ['PlayerList'], api));
+    Object.assign(api, load('outputList.js', ['OutputList'], api));
     Object.assign(api, load('mediaCard.js', ['MediaCard'], api));
     const {MediaIndicator} = load('extension.js', ['MediaIndicator'], api);
     const {MediaControlsPreferences} = load('prefs.js', ['MediaControlsPreferences'], api);
     const manager = new Signals();
     manager.activePlayer = null;
-    manager.readyPlayers = [];
+    manager.controllablePlayers = [];
     manager.cyclePlayer = () => {};
     manager.selectPlayer = () => {};
     let preferencesOpened = 0;
+    const outputs = Object.assign(new Signals(), {outputs: [], active: null, activeId: null});
     const indicator = new MediaIndicator({openPreferences() { preferencesOpened++; }}, settings,
-        {resolve: async () => null}, {lookup: async () => null}, manager);
+        {resolve: async () => null}, {lookup: async () => null}, manager, outputs);
     return {api, values, settings, indicator, manager, boxes, MediaControlsPreferences,
         preferencesOpened: () => preferencesOpened};
 }
+
+test('output rows retain GNOME 46 accents and selection sends no playback commands', () => {
+    const f = fixture();
+    const card = f.indicator._card;
+    const output = {id: 7, name: 'Speakers', origin: '', kind: 'built-in', gicon: {}};
+    card._soundOutputs.outputs = [output];
+    card._soundOutputs.activeId = output.id;
+    card._outputList.setOutputs([output], output.id);
+    card._outputList.setAccentColor('rgb(220, 30, 40)');
+    card._outputList.open();
+    const row = card._outputList._rows.get(output.id);
+    assert.equal(row.check.opacity, 255);
+    assert.ok(row.tile.style.includes('rgb(220, 30, 40)'));
+    let selected;
+    card._soundOutputs.select = id => { selected = id; };
+    f.manager.keepPlaying = () => { throw Error('Unexpected playback resume'); };
+    card.emit('output-selected', output.id);
+    assert.equal(selected, output.id);
+});
 
 test('upstream hover repair clears insensitive controls and restores hover under the pointer', () => {
     const f = fixture();
