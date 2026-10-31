@@ -69,7 +69,7 @@ async function main({github, context, core}) {
         try {
             pr = (await github.rest.pulls.create({...args, base, head:'testing',
                 title:`Promote testing to ${base}`,
-                body:'Promotes the persistent `testing` branch after 72 quiet hours and passing CI.\n\nEvery push restarts the timer. Apply `do-not-merge` to pause automatic promotion; remove it to resume. You may merge early with **Create a merge commit**. Keep the testing branch. See `TESTING-WORKFLOW.md`.'})).data;
+                body:'Automated promotion of the persistent `testing` branch.\n\nPromotion requires a 72-hour stabilization period since the latest testing update, successful validation and a conflict-free merge. New pushes restart the period. The `do-not-merge` label suspends promotion. Early promotion uses a merge commit; the persistent testing branch is retained. Policy: `TESTING-WORKFLOW.md`.'})).data;
         } catch (error) {
             if (error.status !== 422) throw error;
             prs = await github.paginate(github.rest.pulls.list, {...args,state:'open',base,head:`${owner}:testing`,per_page:100});
