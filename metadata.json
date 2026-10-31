@@ -7,6 +7,6 @@
   ],
   "settings-schema": "org.gnome.shell.extensions.media-controller",
   "gettext-domain": "media-controller",
-  "version-name": "3.3-gnome46.1",
+  "version-name": "3.4-gnome46.1",
   "url": "https://github.com/IAmEidrien/media-controller-gnome-46"
 }

@@ -336,7 +336,7 @@
   color: #3584e4;
 }
 
-/* ---------- Footer: player and volume ---------- */
+/* ---------- Footer: player, volume and output ---------- */
 
 .mc-card-footer {
   spacing: 14px;
@@ -386,14 +386,30 @@
   color: rgba(255, 255, 255, 0.6);
 }
 
+
+/* The volume bar and the output button, closer than the footer's spacing:
+ * with the button's padding, its icon is as far from the slider as the
+ * volume icon. */
+.mc-footer-levels {
+  spacing: 2px;
+}
+
 .mc-volume-box {
   spacing: 10px;
   padding: 0 2px;
 }
 
-.mc-volume-icon {
+/* The output button is the volume icon's twin at the slider's other end. */
+.mc-volume-icon,
+.mc-output-button-icon {
   icon-size: 16px;
   color: rgba(255, 255, 255, 0.72);
+}
+
+/* Round on hover, from .mc-app-button, and while focused or open. */
+.mc-output-button:focus,
+.mc-output-button:checked {
+  background-color: rgba(127, 127, 127, 0.25);
 }
 
 .mc-volume {
@@ -408,7 +424,7 @@
   -barlevel-active-background-color: #3584e4;
 }
 
-/* ---------- Player list ---------- */
+/* ---------- Player and output lists ---------- */
 
 /* Radius is the menu's less its border, following the card's corners. */
 .mc-card-scrim {
@@ -417,7 +433,7 @@
 }
 
 /* A single shadow: St cannot draw more than one. */
-.mc-player-list {
+.mc-list {
   padding: 6px;
   spacing: 2px;
   border-radius: 16px;
@@ -426,7 +442,7 @@
   box-shadow: 0 8px 24px 0 rgba(0, 0, 0, 0.5);
 }
 
-.mc-player-list-title {
+.mc-list-title {
   padding: 4px 8px 6px 8px;
   font-size: 0.8em;
   font-weight: 700;
@@ -434,50 +450,50 @@
 }
 
 /* Rows fading out at the edge are the cue that the list scrolls. */
-.mc-player-list-scroll {
+.mc-list-scroll {
   -st-vfade-offset: 24px;
 }
 
 /* The fade already says "more"; the scrollbar is a thin, quiet pill. */
-.mc-player-list-scroll StScrollBar {
+.mc-list-scroll StScrollBar {
   min-width: 3px;
 }
 
-.mc-player-list-scroll StScrollBar > .vhandle {
+.mc-list-scroll StScrollBar > .vhandle {
   border-width: 0;
   border-radius: 99px;
   background-color: rgba(255, 255, 255, 0.22);
 }
 
-.mc-player-list-scroll StScrollBar > .vhandle:hover,
-.mc-player-list-scroll StScrollBar > .vhandle:active {
+.mc-list-scroll StScrollBar > .vhandle:hover,
+.mc-list-scroll StScrollBar > .vhandle:active {
   background-color: rgba(255, 255, 255, 0.4);
 }
 
-.mc-player-list-rows {
+.mc-list-rows {
   spacing: 2px;
 }
 
-.mc-player-row {
+.mc-list-row {
   padding: 6px 8px;
   border-radius: 12px;
 }
 
-.mc-player-row:hover,
-.mc-player-row:focus {
+.mc-list-row:hover,
+.mc-list-row:focus {
   background-color: rgba(255, 255, 255, 0.07);
 }
 
-.mc-player-row-active {
+.mc-list-row-active {
   background-color: rgba(255, 255, 255, 0.1);
 }
 
-.mc-player-row-active:hover,
-.mc-player-row-active:focus {
+.mc-list-row-active:hover,
+.mc-list-row-active:focus {
   background-color: rgba(255, 255, 255, 0.14);
 }
 
-.mc-player-row-box {
+.mc-list-row-box {
   spacing: 10px;
 }
 
@@ -494,11 +510,11 @@
   icon-size: 22px;
 }
 
-.mc-player-row-text {
+.mc-list-row-text {
   spacing: 2px;
 }
 
-.mc-player-row-title {
+.mc-list-row-title {
   font-size: 0.95em;
   font-weight: 600;
   color: #ffffff;
@@ -512,15 +528,34 @@
   icon-size: 12px;
 }
 
-.mc-player-row-subtitle {
+.mc-list-row-subtitle {
   font-size: 0.8em;
   color: rgba(255, 255, 255, 0.55);
 }
 
-/* Marks the player on screen. */
-.mc-player-row-check {
+/* Marks the player on screen, or the output in use. */
+.mc-list-row-check {
   icon-size: 16px;
   color: #3584e4;
+}
+
+/* A round tile for the output's icon, the height of the player rows' art. */
+.mc-output-row-tile {
+  width: 40px;
+  height: 40px;
+  border-radius: 99px;
+  background-color: rgba(127, 127, 127, 0.2);
+}
+
+.mc-output-row-icon {
+  icon-size: 18px;
+}
+
+/* The output in use is filled with the accent color, as the shell's own
+ * toggles are when on. */
+.mc-list-row-active .mc-output-row-tile {
+  background-color: #3584e4;
+  color: #ffffff;
 }
 
 /* ---------- Light style ---------- */
@@ -537,12 +572,13 @@
 .mc-light .mc-card,
 .mc-light .mc-card-title,
 .mc-light .mc-lyrics-line,
-.mc-light .mc-player-row-title {
+.mc-light .mc-list-row-title {
   color: #222226;
 }
 
 .mc-light .mc-card-artist,
-.mc-light .mc-volume-icon {
+.mc-light .mc-volume-icon,
+.mc-light .mc-output-button-icon {
   color: rgba(34, 34, 38, 0.8);
 }
 
@@ -555,7 +591,7 @@
 }
 
 .mc-light .mc-lyrics-status-label,
-.mc-light .mc-player-list-title {
+.mc-light .mc-list-title {
   color: rgba(34, 34, 38, 0.62);
 }
 
@@ -563,7 +599,7 @@
   color: rgba(34, 34, 38, 0.7);
 }
 
-.mc-light .mc-player-row-subtitle {
+.mc-light .mc-list-row-subtitle {
   color: rgba(34, 34, 38, 0.65);
 }
 
@@ -629,33 +665,42 @@
   background-color: rgba(0, 0, 0, 0.2);
 }
 
-.mc-light .mc-player-list {
+.mc-light .mc-list {
   background-color: #ffffff;
   border: 1px solid rgba(34, 34, 38, 0.12);
   box-shadow: 0 8px 24px 0 rgba(0, 0, 0, 0.2);
 }
 
-.mc-light .mc-player-list-scroll StScrollBar > .vhandle {
+.mc-light .mc-list-scroll StScrollBar > .vhandle {
   background-color: rgba(34, 34, 38, 0.22);
 }
 
-.mc-light .mc-player-list-scroll StScrollBar > .vhandle:hover,
-.mc-light .mc-player-list-scroll StScrollBar > .vhandle:active {
+.mc-light .mc-list-scroll StScrollBar > .vhandle:hover,
+.mc-light .mc-list-scroll StScrollBar > .vhandle:active {
   background-color: rgba(34, 34, 38, 0.4);
 }
 
-.mc-light .mc-player-row:hover,
-.mc-light .mc-player-row:focus {
+.mc-light .mc-list-row:hover,
+.mc-light .mc-list-row:focus {
   background-color: rgba(34, 34, 38, 0.07);
 }
 
-.mc-light .mc-player-row-active {
+.mc-light .mc-list-row-active {
   background-color: rgba(34, 34, 38, 0.1);
 }
 
-.mc-light .mc-player-row-active:hover,
-.mc-light .mc-player-row-active:focus {
+.mc-light .mc-list-row-active:hover,
+.mc-light .mc-list-row-active:focus {
   background-color: rgba(34, 34, 38, 0.14);
+}
+
+.mc-light .mc-output-row-tile {
+  background-color: rgba(34, 34, 38, 0.08);
+}
+
+/* Restated: the rule above outranks the dark one by coming later. */
+.mc-light .mc-list-row-active .mc-output-row-tile {
+  background-color: #3584e4;
 }
 
 /* ---------- Glass ---------- */
@@ -687,7 +732,9 @@
   border-color: rgba(255, 255, 255, 0.8);
 }
 
-.mc-glass .mc-app-button:hover {
+.mc-glass .mc-app-button:hover,
+.mc-glass .mc-output-button:focus,
+.mc-glass .mc-output-button:checked {
   background-color: rgba(255, 255, 255, 0.14);
 }
 
@@ -773,11 +820,21 @@
 }
 
 /* The list carries the card's backdrop as an inline background-image. */
-.mc-glass .mc-player-list {
+.mc-glass .mc-list {
   background-size: cover;
   border-color: rgba(255, 255, 255, 0.16);
 }
 
-.mc-glass .mc-player-row-check {
+.mc-glass .mc-list-row-check {
   color: #ffffff;
+}
+
+.mc-glass .mc-output-row-tile {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+/* White in place of the accent color, as everywhere on the glass. */
+.mc-glass .mc-list-row-active .mc-output-row-tile {
+  background-color: rgba(255, 255, 255, 0.9);
+  color: #222226;
 }

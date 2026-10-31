@@ -16,6 +16,7 @@ import { BackdropMaker } from './backdrop.js';
 import { boxOrientation } from './compat.js';
 import { Equalizer } from './equalizer.js';
 import { LyricsPanel, lyricsIcon } from './lyricsPanel.js';
+import { OutputList } from './outputList.js';
 import { PlayerList } from './playerList.js';
 import {
     US_PER_SECOND, loopIconName, nextLoopStatus, playPauseIconName,
@@ -29,8 +30,8 @@ const POSITION_POLL_SECONDS = 1;
  * this caps them at roughly three lines. */
 const MAX_TITLE_CHARS = 120;
 
-/* The player list rises out of the player button: gap above the button, inset
- * from the card's edges, and how far it slides in. */
+/* A footer list rises out of its button: gap above the button, inset from the
+ * card's edges, and how far it slides in. */
 const LIST_GAP = 6;
 const LIST_INSET = 10;
 const LIST_SLIDE = 12;
@@ -116,15 +117,22 @@ function pop(actor) {
     });
 }
 
-/* The layer the player list floats in. It asks for no room, so the list can
+/* The layer a footer list floats in. It asks for no room, so the list can
  * never hold the card open (it once kept a closing card at its old height),
- * and it seats the list on every allocation, so the list follows the player
- * button wherever the card's height moves it. anchor() returns the y of the
- * list's bottom edge, in the layer's coordinates. */
+ * and it seats the list on every allocation, so the list follows its button
+ * wherever the card's height moves it. anchor() returns the y of the list's
+ * bottom edge, in the layer's coordinates. */
 const ListLayer = GObject.registerClass(
 class ListLayer extends St.Widget {
     _init(list, anchor) {
-        super._init({x_expand: true, y_expand: true, visible: false});
+        /* Clipped to the card: the list sits close to the card's sides, and
+         * its shadow would spill past them onto whatever is behind the menu. */
+        super._init({
+            x_expand: true,
+            y_expand: true,
+            visible: false,
+            clip_to_allocation: true,
+        });
         this._list = list;
         this._anchor = anchor;
         this.add_child(list);
@@ -158,13 +166,15 @@ export const MediaCard = GObject.registerClass({
         'open-preferences': {},
         /* Carries the picked player's MPRIS bus name. */
         'player-selected': {param_types: [GObject.TYPE_STRING]},
+        /* Carries the picked sound output's mixer id. */
+        'output-selected': {param_types: [GObject.TYPE_UINT]},
         /* Carries the backdrop's edge color as CSS, or '' for the plain card. */
         'backdrop-changed': {param_types: [GObject.TYPE_STRING]},
     },
 }, class MediaCard extends St.Widget {
-    _init(artCache, lyricsSource, settings) {
+    _init(artCache, lyricsSource, soundOutputs, settings) {
         /* Three layers: the album-art backdrop, the content over it, and on
-         * top the player list and its scrim, floating over the content. */
+         * top the footer's lists and their scrim, floating over the content. */
         super._init({
             style_class: 'mc-card',
             layout_manager: new Clutter.BinLayout(),
@@ -184,6 +194,7 @@ export const MediaCard = GObject.registerClass({
         this.add_child(this._content);
 
         this._artCache = artCache;
+        this._soundOutputs = soundOutputs;
         this._settings = settings;
         /* Stage pixels; known once the card is first opened. */
         this._maxHeight = Infinity;
@@ -207,15 +218,16 @@ export const MediaCard = GObject.registerClass({
         this._position = 0;
         this._players = [];
         this._activePlayer = null;
-        this._playerListOpen = false;
-        this._focusBeforeList = null;
+        /* The footer list that is open, of _playerPopup and _outputPopup. */
+        this._popup = null;
+        this._focusBeforePopup = null;
 
         this._buildHeader();
         this._buildLyrics(lyricsSource);
         this._buildSeekBar();
         this._buildControls();
         this._buildFooter();
-        this._buildPlayerList();
+        this._buildPopups();
 
         this._settingsSignals = [
             this._settings.connect('changed::card-show-art', () => this.sync()),
@@ -227,6 +239,8 @@ export const MediaCard = GObject.registerClass({
             this._settings.connect('changed::card-show-lyrics-button', () => this.sync()),
             this._settings.connect('changed::card-show-player-switcher',
                 () => this._updatePicker()),
+            this._settings.connect('changed::card-show-output-switcher',
+                () => this._updateOutputs()),
             this._settings.connect('changed::card-width', () => this._applyWidth()),
             this._settings.connect('changed::lyrics-height', () => this._applyLyricsHeight()),
             this._settings.connect('changed::card-art-size', () => this._applyArtSize()),
@@ -235,6 +249,9 @@ export const MediaCard = GObject.registerClass({
         ];
         this._applyWidth();
         this._applyArtSize();
+
+        this._soundOutputs.connectObject('changed', () => this._updateOutputs(), this);
+        this._updateOutputs();
 
         this.connect('destroy', () => this._onDestroy());
     }
@@ -327,8 +344,9 @@ export const MediaCard = GObject.registerClass({
         else
             lower.ease({opacity: 0, ...fade});
 
-        /* The list is a sheet of the same glass. */
+        /* The lists are sheets of the same glass. */
         this._playerList.style = style;
+        this._outputList.style = style;
         this.emit('backdrop-changed', backdrop?.color ?? '');
     }
 
@@ -357,8 +375,31 @@ export const MediaCard = GObject.registerClass({
         this._pickerButton.can_focus = choice;
         setReactive(this._pickerButton, choice);
 
-        if (!choice)
-            this._closePlayerList();
+        if (!choice && this._popup === this._playerPopup)
+            this._closePopup();
+        this._updateFooter();
+    }
+
+    /* Like the shell's sound menu, the button appears only once there is a
+     * second output to switch to. Its icon is the output in use. */
+    _updateOutputs() {
+        const outputs = this._soundOutputs.outputs;
+        const active = this._soundOutputs.active;
+        this._outputList.setOutputs(outputs, this._soundOutputs.activeId);
+
+        const show = outputs.length > 1 &&
+            this._settings.get_boolean('card-show-output-switcher');
+        this._outputButton.visible = show;
+        if (active)
+            this._outputIcon.gicon = active.gicon;
+        else
+            this._outputIcon.icon_name = 'audio-speakers-symbolic';
+        this._outputButton.accessible_name = active?.name
+            ? _('Sound output: %s').format(active.name)
+            : _('Sound output');
+
+        if (!show && this._popup === this._outputPopup)
+            this._closePopup();
         this._updateFooter();
     }
 
@@ -609,7 +650,8 @@ export const MediaCard = GObject.registerClass({
         this._content.add_child(row);
     }
 
-    /* The bottom line, under a hairline: the player picker beside its volume. */
+    /* The bottom line, under a hairline: the player picker beside its volume,
+     * and the sound output at the end. */
     _buildFooter() {
         this._footer = new St.BoxLayout({
             style_class: 'mc-card-footer',
@@ -617,8 +659,20 @@ export const MediaCard = GObject.registerClass({
         });
         this._buildPicker();
         this._buildVolume();
+        this._buildOutputButton();
+
+        /* Closer together than the footer's spacing, so the output icon sits
+         * as near the slider as the volume icon does. */
+        const levels = new St.BoxLayout({
+            style_class: 'mc-footer-levels',
+            ...boxOrientation(Clutter.Orientation.HORIZONTAL),
+            x_expand: true,
+        });
+        levels.add_child(this._volumeBox);
+        levels.add_child(this._outputButton);
+
         this._footer.add_child(this._pickerButton);
-        this._footer.add_child(this._volumeBox);
+        this._footer.add_child(levels);
         this._content.add_child(this._footer);
     }
 
@@ -656,28 +710,43 @@ export const MediaCard = GObject.registerClass({
             accessible_name: _('Switch player'),
             child: box,
         });
-        this._pickerButton.connect('clicked', () => {
-            if (this._playerListOpen) {
-                this._closePlayerList();
-                return;
-            }
-            /* From the keyboard, focus goes into the list; with the pointer, no
-             * row should light up as if focused. */
-            const type = Clutter.get_current_event()?.type();
-            this._openPlayerList(type === Clutter.EventType.KEY_PRESS ||
-                type === Clutter.EventType.KEY_RELEASE);
+        this._pickerButton.connect('clicked',
+            () => this._togglePopup(this._playerPopup));
+    }
+
+    /* The system's sound output, not the player's: picking one moves every app
+     * that plays through the default output. At rest it looks like the volume
+     * icon; like the gear, it is round when hovered. */
+    _buildOutputButton() {
+        this._outputIcon = new St.Icon({
+            style_class: 'mc-output-button-icon',
+            icon_name: 'audio-speakers-symbolic',
         });
+        this._outputButton = new St.Button({
+            style_class: 'mc-app-button mc-output-button',
+            can_focus: true,
+            x_align: Clutter.ActorAlign.END,
+            y_align: Clutter.ActorAlign.CENTER,
+            child: this._outputIcon,
+        });
+        this._outputButton.connect('clicked',
+            () => this._togglePopup(this._outputPopup));
     }
 
+    /* With no volume bar to fill the line, the output button still keeps to
+     * its end. Expanding beside the volume bar would take half its room. */
     _updateFooter() {
-        this._footer.visible = this._pickerButton.visible || this._volumeBox.visible;
+        this._outputButton.x_expand = !this._volumeBox.visible;
+        this._footer.visible = this._pickerButton.visible ||
+            this._volumeBox.visible || this._outputButton.visible;
     }
 
-    /* The list floats over the card, so opening it never makes the card taller
-     * or pushes it off screen. */
-    _buildPlayerList() {
+    /* The lists float over the card, so opening one never makes the card
+     * taller or pushes it off screen. */
+    _buildPopups() {
         /* Dims the card and takes the dismissing click, so it does not also
-         * land on a control underneath. */
+         * land on a control underneath. It covers the footer's buttons too,
+         * so only one list is ever open. */
         this._scrim = new St.Button({
             style_class: 'mc-card-scrim',
             x_expand: true,
@@ -685,102 +754,118 @@ export const MediaCard = GObject.registerClass({
             opacity: 0,
             visible: false,
         });
-        this._scrim.connect('clicked', () => this._closePlayerList());
+        this._scrim.connect('clicked', () => this._closePopup());
+        this.add_child(this._scrim);
 
         this._playerList = new PlayerList(this._artCache);
-        this._playerList.opacity = 0;
         this._playerList.connect('player-selected', (_list, busName) => {
-            this._closePlayerList();
+            this._closePopup();
             this.emit('player-selected', busName);
         });
-        this._playerList.connect('close-requested', () => this._closePlayerList());
+        this._playerPopup = this._addPopup(this._playerList,
+            this._pickerButton, this._pickerArrow);
+
+        this._outputList = new OutputList();
+        this._outputList.connect('output-selected', (_list, id) => {
+            this._closePopup();
+            this.emit('output-selected', id);
+        });
+        this._outputPopup = this._addPopup(this._outputList, this._outputButton, null);
+    }
+
+    /* arrow, if any, turns over while the list is open. */
+    _addPopup(list, button, arrow) {
+        list.opacity = 0;
+        list.connect('close-requested', () => this._closePopup());
 
         /* Placed by the layer, not margins, which St resets from the stylesheet
          * on every style change. The layer is not reactive, so a click beside
          * the list reaches the scrim. */
-        this._listLayer = new ListLayer(this._playerList, () => this._pickerTop());
-
-        this.add_child(this._scrim);
-        this.add_child(this._listLayer);
+        const layer = new ListLayer(list, () => this._topOf(button));
+        this.add_child(layer);
+        return {list, layer, button, arrow};
     }
 
-    /* The player button's top, in card coordinates. The content is allocated
-     * before the list layer asks, so the allocations are current. */
-    _pickerTop() {
+    /* An actor's top, in card coordinates. The content is allocated before
+     * the list layers ask, so the allocations are current. */
+    _topOf(widget) {
         let y = 0;
-        for (let actor = this._pickerButton; actor && actor !== this; actor = actor.get_parent())
+        for (let actor = widget; actor && actor !== this; actor = actor.get_parent())
             y += actor.get_allocation_box().y1;
         return y;
     }
 
-    _openPlayerList(byKeyboard) {
-        if (this._playerListOpen)
+    _togglePopup(popup) {
+        if (this._popup === popup) {
+            this._closePopup();
             return;
-        this._playerListOpen = true;
-        this._focusBeforeList = global.stage.key_focus;
+        }
+        /* From the keyboard, focus goes into the list; with the pointer, no
+         * row should light up as if focused. */
+        const type = Clutter.get_current_event()?.type();
+        this._openPopup(popup, type === Clutter.EventType.KEY_PRESS ||
+            type === Clutter.EventType.KEY_RELEASE);
+    }
 
-        const list = this._playerList;
+    _openPopup(popup, byKeyboard) {
+        if (this._popup)
+            return;
+        this._popup = popup;
+        this._focusBeforePopup = global.stage.key_focus;
+
+        const {list, layer, button, arrow} = popup;
         list.open();
         list.remove_all_transitions();
-        this._listLayer.show();
+        layer.show();
 
+        const mode = Clutter.AnimationMode.EASE_OUT_QUAD;
         this._scrim.remove_all_transitions();
         this._scrim.show();
-        this._scrim.ease({
-            opacity: 255,
-            duration: LIST_MS,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-        });
+        this._scrim.ease({opacity: 255, duration: LIST_MS, mode});
         list.translation_y = LIST_SLIDE;
-        list.ease({
-            opacity: 255,
-            translation_y: 0,
-            duration: LIST_MS,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-        });
-        this._pickerArrow.ease({
-            rotation_angle_z: 180,
-            duration: LIST_MS,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-        });
-        this._pickerButton.checked = true;
+        list.ease({opacity: 255, translation_y: 0, duration: LIST_MS, mode});
+        arrow?.ease({rotation_angle_z: 180, duration: LIST_MS, mode});
+        button.checked = true;
 
         if (byKeyboard)
-            list.focusFirst();
+            list.focusActive();
         else
             list.grab_key_focus();
     }
 
     /* animate is false when the card itself is going away. */
-    _closePlayerList(animate = true) {
-        if (!this._playerListOpen)
+    _closePopup(animate = true) {
+        const popup = this._popup;
+        if (!popup)
             return;
-        this._playerListOpen = false;
+        this._popup = null;
+
+        const {list, layer, button, arrow} = popup;
 
         /* Focus goes back where it was, not left in a list about to hide. */
         const focus = global.stage.key_focus;
-        if (focus && this._playerList.contains(focus))
-            (this._focusBeforeList ?? this._pickerButton).grab_key_focus();
-        this._focusBeforeList = null;
+        if (focus && list.contains(focus))
+            (this._focusBeforePopup ?? button).grab_key_focus();
+        this._focusBeforePopup = null;
 
-        this._playerList.close();
-        this._pickerButton.checked = false;
+        list.close();
+        button.checked = false;
 
         const duration = animate ? LIST_MS : 0;
         const mode = Clutter.AnimationMode.EASE_OUT_QUAD;
-        this._pickerArrow.ease({rotation_angle_z: 0, duration, mode});
+        arrow?.ease({rotation_angle_z: 0, duration, mode});
         this._scrim.ease({
             opacity: 0,
             duration,
             mode,
             onComplete: () => this._scrim.hide(),
         });
-        this._playerList.ease({
+        list.ease({
             opacity: 0,
             translation_y: LIST_SLIDE / 2,
             duration,
             mode,
-            onComplete: () => this._listLayer.hide(),
+            onComplete: () => layer.hide(),
         });
     }
 
@@ -952,9 +1037,9 @@ export const MediaCard = GObject.registerClass({
     /* Whether the card is on screen; animations and polling run only then. */
     setActive(active) {
         this._active = active;
-        /* The card opens as it was left, apart from the list. */
+        /* The card opens as it was left, apart from the lists. */
         if (!active)
-            this._closePlayerList(false);
+            this._closePopup(false);
         this._equalizer.setActive(active);
         this._lyrics.setActive(active);
         this._updateTimer();
@@ -1179,6 +1264,7 @@ export const MediaCard = GObject.registerClass({
         this._slider.set_style(`-barlevel-active-background-color: ${color};`);
         this._volumeSlider.set_style(`color: ${color}; -barlevel-active-background-color: ${color};`);
         this._playerList.setAccentColor(color);
+        this._outputList.setAccentColor(color);
         this._applyArtStyle();
         this.sync();
     }
@@ -1229,6 +1315,6 @@ export const MediaCard = GObject.registerClass({
         this._player = null;
         this._players = [];
         this._activePlayer = null;
-        this._focusBeforeList = null;
+        this._focusBeforePopup = null;
     }
 });

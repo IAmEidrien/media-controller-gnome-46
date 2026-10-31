@@ -1,7 +1,7 @@
 # Media Controller: GNOME 46 public fork
 
 This is a compatibility and convenience fork of `naimur900/media-controller-gnome`,
-based on upstream `e292b37fbff0d4470e9b35bf5bc312b77bd77dfe` (3.3). Preserve
+based on upstream `07c66b5` (3.4). Preserve
 upstream ancestry, copyright notices, and the GPL-2.0-or-later license.
 
 The target is Linux Mint 22 / GNOME Shell 46 on Wayland, with GLib 2.80 and
@@ -30,8 +30,11 @@ testing from syntax checks or mocked constructors.
 - Panel shortcuts apply to the selected player and must not intercept transport
   controls. Player-volume shortcuts affect MPRIS Volume, not system volume.
   Keep the Actions group after Placement in the Panel preferences.
+- Sound output selection changes the system default via Gvc, never issues
+  Play to undo a pause. Do not infer user intent from pauses shortly after an
+  output switch. Preserve the audio mixer's signal cleanup and close on disable.
 - Back/Forward defaults are Previous/Next player. Player cycling belongs to
-  the shared action list, uses the ready-player roster with wraparound, and must
+  the shared action list, uses the same ready, non-idle roster as the menu with wraparound, and must
   not change playback or depend on CanControl. Preserve scroll fractions across
   selections caused by the gesture itself; external player changes still clear
   them. Keep old schema action enum numbers stable.
