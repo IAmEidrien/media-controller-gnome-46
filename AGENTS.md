@@ -60,3 +60,7 @@ Run `make check`, `make pack`, and `git diff --check` for relevant changes.
 `make check` uses Node compatibility mocks, not a running GNOME Shell. A live
 Wayland check should cover Rhythmbox, a browser player, switching players,
 transport controls, seeking, preferences, and disable/re-enable.
+
+License policy: follow LICENSING.md. Prefer MIT for independent original work,
+then GPL-2.0-or-later where compatible; preserve stricter upstream grants,
+attribution and asset licenses. Never infer permission for unlicensed code.
