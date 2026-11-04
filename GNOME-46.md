@@ -1,7 +1,8 @@
 # GNOME 46 compatibility and workflow
 
-The upstream version is 2.5 at `0c72652`. Changing `shell-version` alone would
-leave these incompatibilities:
+The initial port used upstream 2.5 at `0c72652`; the current integration baseline
+is upstream 3.4 at `07c66b5`. Changing `shell-version` alone would leave these
+incompatibilities:
 
 | Upstream API | GNOME 46 adaptation |
 | --- | --- |

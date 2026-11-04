@@ -4,7 +4,7 @@ Maintainer's own space: [HUMANS.md](HUMANS.md), reserved for Eidrien's writing.
 
 GNOME 46 compatibility and convenience fork of
 [naimur900/media-controller-gnome](https://github.com/naimur900/media-controller-gnome),
-based on upstream commit `e292b37` (3.3). The formal GitHub fork relationship and
+based on upstream commit `07c66b5` (3.4). The formal GitHub fork relationship and
 upstream history are retained. This fork has its own UUID and only declares
 GNOME 46 support. The upstream release targets GNOME 47–51.
 
@@ -29,7 +29,32 @@ Rhythmbox, mpv, and so on.
   <img src="public/img-1.png" alt="Upstream panel indicator and now-playing card" width="700">
 </p>
 
-## Upstream 3.3
+## Upstream 3.4
+
+The October 30, 2026 manual merge adds the system sound-output selector and
+shared footer-list layout. The selector uses GNOME's Gvc mixer and changes the
+system default output, not just the selected player's output. Its preference
+is under Card; the button appears when multiple outputs are available. Empty
+players without playable media no longer occupy the menu or player-cycling roster.
+
+This fork deliberately omits upstream's automatic resume-after-output-switch
+heuristic: a pause arriving within its three-second window could be a deliberate
+user action. Output selection sends no playback commands; if an audio service
+pauses playback during a device/profile change, resume it manually.
+
+The guarded sync stopped because upstream changed the Makefile and showcase
+image; review also found a new Gvc dependency and conflicts in the fork's MPRIS
+code. The merge preserves flat runtime packaging, GNOME 46 identity, panel
+shortcuts, symbolic icons, confirmed-status pause handling and theme accents.
+
+Validation: `make check`, `make pack`, compatibility guards and a native GNOME 46
+Wayland session with two virtual PulseAudio outputs. Native checks covered
+construction, Gvc discovery/default switching, output rows/popup, accents and
+disable/re-enable cleanup. Physical Bluetooth/HDMI routing and real browser or
+Rhythmbox playback were not exercised in this minimal environment. Compatibility
+mocks remain mocks; they do not establish those runtime behaviors.
+
+### Earlier 3.3 integration
 
 Adds the optional album-art backdrop, which renders a small blurred image behind
 the now-playing card and retains the dark glass palette in light style. The

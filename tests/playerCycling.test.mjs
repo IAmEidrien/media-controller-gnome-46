@@ -35,6 +35,20 @@ function fixture() {
     return {manager, player, changes};
 }
 
+test('idle players are excluded from the menu roster and cycling', () => {
+    const {manager, player} = fixture();
+    const a = player('a');
+    player('idle').idle = true;
+    const b = player('b');
+    manager._active = a;
+    assert.deepEqual(Array.from(manager.readyPlayers), [a, b]);
+    manager.cyclePlayer(1);
+    assert.equal(manager.activePlayer, b);
+    manager._pinned = 'idle';
+    manager._selectActive();
+    assert.notEqual(manager.activePlayer.busName, 'idle');
+});
+
 test('cycling wraps in both directions through ready players, including paused players', () => {
     const {manager, player, changes} = fixture();
     const a = player('a', 'Playing');

@@ -249,6 +249,12 @@
       <description>A slider under the playback controls that sets the player's own volume. Only shown for players that let their volume be set over MPRIS, which browsers do not.</description>
     </key>
 
+    <key name="card-show-output-switcher" type="b">
+      <default>true</default>
+      <summary>Show the sound output button in the card</summary>
+      <description>A button at the bottom right of the card showing the sound output in use, such as speakers or headphones. While more than one output is available, it opens a list of them to switch between. The choice is the system's default output, the same as in the sound menu, so it applies to every app rather than only the player on screen.</description>
+    </key>
+
     <key name="card-show-lyrics-button" type="b">
       <default>true</default>
       <summary>Show the lyrics button in the card</summary>
