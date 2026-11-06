@@ -20,6 +20,7 @@ import {MprisManager} from './mpris.js';
 import {activatePanelAction} from './panelActions.js';
 import {ScrollingLabel} from './scrollingLabel.js';
 import {SoundOutputs} from './soundOutputs.js';
+import {smartPauseEnabled, SmartPauseWatcher} from './smartPause.js';
 import {UpdateNotice} from './updateNotice.js';
 import {loopIconName, nextLoopStatus, playPauseIconName, seekOffset,
     setReactive, setToggleStyle} from './transport.js';
@@ -573,6 +574,8 @@ export default class MediaControlsExtension extends Extension {
         this._artCache = new ArtCache();
         this._lyricsSource = new LyricsSource(this._userAgent());
         this._manager = new MprisManager();
+        this._smartPauseWatcher = new SmartPauseWatcher(Main.extensionManager,
+            () => this._applyExclusivePlayback());
         this._applyExclusivePlayback();
         this._soundOutputs = new SoundOutputs();
         this._indicator = new MediaIndicator(this, this._settings, this._artCache,
@@ -603,7 +606,8 @@ export default class MediaControlsExtension extends Extension {
     /* mpris.js knows nothing about GSettings, so the setting is applied here. */
     _applyExclusivePlayback() {
         this._manager.exclusivePlayback =
-            this._settings.get_boolean('pause-others-on-play');
+            this._settings.get_boolean('pause-others-on-play') &&
+            !smartPauseEnabled(Main.extensionManager);
     }
 
     _panelBoxes() {
@@ -645,6 +649,8 @@ export default class MediaControlsExtension extends Extension {
         /* The extension has no `destroy` signal, so this owner disconnects
          * explicitly. */
         this._settings.disconnectObject(this);
+        this._smartPauseWatcher?.destroy();
+        this._smartPauseWatcher = null;
 
         this._themeAccent?.destroy();
         this._themeAccent = null;

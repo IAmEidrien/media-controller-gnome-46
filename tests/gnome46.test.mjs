@@ -116,6 +116,10 @@ function fixture() {
             values[key] = value;
             this.emit(`changed::${key}`);
         }
+        set_boolean(key, value) {
+            values[key] = value;
+            this.emit(`changed::${key}`);
+        }
         bind(key, row, property) {
             row[property] = values[key];
             this.connect(`changed::${key}`, () => { row[property] = values[key]; });
@@ -165,6 +169,10 @@ function fixture() {
         GLib: {PRIORITY_DEFAULT: 0, get_monotonic_time: () => 0,
             timeout_add: () => 1, timeout_add_seconds: () => 2, Source: {remove() {}}},
         Main: {},
+        SmartPauseClient: class {
+            constructor(changed) { this.changed = changed; api.smartPauseClient = this; }
+            destroy() { this.destroyed = true; }
+        },
         Extension: class {},
         ExtensionPreferences: class {getSettings() { return settings; }},
         Slider: Actor,
@@ -188,7 +196,8 @@ function fixture() {
     Object.assign(api, load('playerList.js', ['PlayerList'], api));
     Object.assign(api, load('outputList.js', ['OutputList'], api));
     Object.assign(api, load('mediaCard.js', ['MediaCard'], api));
-    const {MediaIndicator} = load('extension.js', ['MediaIndicator'], api);
+    Object.assign(api, load('smartPause.js', ['smartPauseEnabled', 'SmartPauseWatcher', 'SMART_PAUSE_UUID'], api));
+    const {MediaIndicator, MediaControlsExtension} = load('extension.js', ['MediaIndicator', 'MediaControlsExtension'], api);
     const {MediaControlsPreferences} = load('prefs.js', ['MediaControlsPreferences'], api);
     const manager = new Signals();
     manager.activePlayer = null;
@@ -199,7 +208,7 @@ function fixture() {
     const outputs = Object.assign(new Signals(), {outputs: [], active: null, activeId: null});
     const indicator = new MediaIndicator({openPreferences() { preferencesOpened++; }}, settings,
         {resolve: async () => null}, {lookup: async () => null}, manager, outputs);
-    return {api, values, settings, indicator, manager, boxes, MediaControlsPreferences,
+    return {api, values, settings, indicator, manager, boxes, MediaControlsPreferences, MediaControlsExtension,
         preferencesOpened: () => preferencesOpened};
 }
 
@@ -318,7 +327,7 @@ test('all preferences pages construct without libadwaita 1.6 ButtonRow', () => {
     const f = fixture();
     const prefs = new f.MediaControlsPreferences();
     const pages = [];
-    prefs.fillPreferencesWindow({set_default_size() {}, add: page => pages.push(page)});
+    prefs.fillPreferencesWindow({set_default_size() {}, add: page => pages.push(page), connect() {}});
     assert.equal(pages.length, 3);
     const maintenance = pages[2];
     const clearRow = maintenance.children[0].children[1];
@@ -727,4 +736,46 @@ test('new card volume slider follows player capabilities and the fork accent', (
     assert.equal(card._volumeBox.visible, false);
     card.destroy();
     assert.equal(card._volumeHoldId, 0);
+});
+
+
+test('Smart Pause owns automatic playback while enabled; preferences retain the saved choice', () => {
+    const f = fixture();
+    const prefs = new f.MediaControlsPreferences();
+    let close;
+    prefs.fillPreferencesWindow({set_default_size() {}, add() {}, connect(_name, cb) { close = cb; }});
+    const row = prefs._exclusiveRowWidget;
+    assert.equal(row.use_markup, false, 'the extension name contains a literal ampersand');
+    f.settings.set_boolean('pause-others-on-play', true);
+    assert.equal(row.active, true);
+    f.api.smartPauseClient.changed(true);
+    assert.equal(row.active, false);
+    assert.equal(row.sensitive, false);
+    assert.match(row.subtitle, /Smart Pause/);
+    f.settings.set_boolean('pause-others-on-play', true);
+    assert.equal(row.active, false, 'external setting writes cannot bypass the override');
+    assert.equal(f.values['pause-others-on-play'], true, 'saved preference is not overwritten');
+    f.api.smartPauseClient.changed(false);
+    assert.equal(row.active, true);
+    assert.equal(row.sensitive, true);
+    close();
+    assert.equal(f.api.smartPauseClient.destroyed, true);
+
+    let state = 2;
+    const extensions = Object.assign(new Signals(), {lookup: () => ({state})});
+    f.api.Main.extensionManager = extensions;
+    const extension = new f.MediaControlsExtension();
+    extension._settings = f.settings;
+    extension._manager = {};
+    const watcher = new f.api.SmartPauseWatcher(extensions, () => extension._applyExclusivePlayback());
+    extension._applyExclusivePlayback();
+    assert.equal(extension._manager.exclusivePlayback, true);
+    for (const next of [1, 2, 3, 6, 1]) {
+        state = next;
+        extensions.emit('extension-state-changed', {uuid: f.api.SMART_PAUSE_UUID});
+        assert.equal(extension._manager.exclusivePlayback, next !== 1);
+    }
+    watcher.destroy();
+    watcher.destroy();
+    assert.equal(extensions.listeners.size, 0);
 });
