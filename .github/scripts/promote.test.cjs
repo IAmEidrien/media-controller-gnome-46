@@ -7,8 +7,8 @@ const now = Date.parse('2026-10-25T12:00:00Z');
 const run = {id:1,event:'push',head_sha:sha,created_at:new Date(now-HOURS).toISOString(),status:'completed',conclusion:'success'};
 const pr = {number:1,state:'open',draft:false,head:{sha},labels:[],mergeable:true,mergeable_state:'clean'};
 const fixture = changes => ({sha,now,run:{...run},pr:{...pr},...changes});
-test('exactly 72 quiet hours and passing CI permit a merge',()=>assert.equal(decision(fixture()),null));
-test('never promotes even one millisecond early',()=>assert.match(decision(fixture({now:now-1})),/72-hour/));
+test('exactly seven quiet days and passing CI permit a merge',()=>assert.equal(decision(fixture()),null));
+test('never promotes even one millisecond early',()=>assert.match(decision(fixture({now:now-1})),/7-day/));
 test('labels pause and removal resumes without resetting the receipt',()=>{
  assert.match(decision(fixture({pr:{...pr,labels:[{name:'do-not-merge'}]}})),/Paused/);
  assert.equal(decision(fixture()),null);
@@ -38,7 +38,7 @@ test('closed, draft, changed and conflicting PRs block',()=>{
 test('new pushes reset the timer even when a previously tested SHA returns',()=>{
  const newRun={...run,id:2,created_at:new Date(now).toISOString()};
  assert.equal(receipt([run,newRun],sha),newRun);
- assert.match(decision(fixture({run:receipt([run,newRun],sha)})),/72-hour/);
+ assert.match(decision(fixture({run:receipt([run,newRun],sha)})),/7-day/);
  assert.equal(receipt([run,{...newRun,head_sha:'different'}],sha),null);
 });
 test('rerunning CI preserves its original server creation time',()=>{

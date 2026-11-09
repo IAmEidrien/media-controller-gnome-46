@@ -1,7 +1,7 @@
 // Repository-local promotion controller. Candidate code never runs with this token.
 'use strict';
 const fs = require('node:fs');
-const HOURS = 72 * 60 * 60 * 1000;
+const HOURS = 7 * 24 * 60 * 60 * 1000;
 const CI = 'testing-ci.yml';
 
 function receipt(runs, sha) {
@@ -17,7 +17,7 @@ function decision({pr, sha, run, now = Date.now(), extraRuns = [], statuses = []
     if (pr.labels.some(l => l.name === 'do-not-merge')) return 'Paused by do-not-merge';
     if (pr.head.sha !== sha) return 'Testing changed';
     if (!run || run.head_sha !== sha || !Number.isFinite(Date.parse(run.created_at))) return 'No current push receipt';
-    if (now - Date.parse(run.created_at) < HOURS) return '72-hour quiet period is not complete';
+    if (now - Date.parse(run.created_at) < HOURS) return '7-day quiet period is not complete';
     if (run.status !== 'completed' || run.conclusion !== 'success') return 'Required validation has not passed';
     if (extraRuns.some(r => r.status !== 'completed' || r.conclusion !== 'success')) return 'Additional push CI has not passed';
     if (statuses.some(s => s.state !== 'success')) return 'Commit status has not passed';
@@ -54,7 +54,7 @@ async function main({github, context, core}) {
                 commit_message: `Merge ${base} into testing before validation`});
             if (merged.status !== 204) {
                 await github.rest.actions.createWorkflowDispatch({...args, workflow_id: CI, ref: 'testing'});
-                return report('Release changes merged into testing; validation and the 72-hour period restarted.');
+                return report('Release changes merged into testing; validation and the 7-day period restarted.');
             }
         } catch (error) {
             if (error.status === 409) return report('Testing conflicts with the release branch; maintainer resolution required.');
@@ -69,7 +69,7 @@ async function main({github, context, core}) {
         try {
             pr = (await github.rest.pulls.create({...args, base, head:'testing',
                 title:`Promote testing to ${base}`,
-                body:'Automated promotion of the persistent `testing` branch.\n\nPromotion requires a 72-hour stabilization period since the latest testing update, successful validation and a conflict-free merge. New pushes restart the period. The `do-not-merge` label suspends promotion. Early promotion uses a merge commit; the persistent testing branch is retained. Policy: `TESTING-WORKFLOW.md`.'})).data;
+                body:'Automated promotion of the persistent `testing` branch.\n\nPromotion requires a 7-day stabilization period since the latest testing update, successful validation and a conflict-free merge. New pushes restart the period. The `do-not-merge` label suspends promotion. Early promotion uses a merge commit; the persistent testing branch is retained. Policy: `TESTING-WORKFLOW.md`.'})).data;
         } catch (error) {
             if (error.status !== 422) throw error;
             prs = await github.paginate(github.rest.pulls.list, {...args,state:'open',base,head:`${owner}:testing`,per_page:100});

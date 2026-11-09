@@ -5,7 +5,7 @@ The release branch remains `main`. Push development changes to the persistent
 Users who want released changes continue pulling `main`.
 
 The promotion controller opens one `testing` → `main` pull request while changes
-are pending. It checks hourly and merges only after **72 hours without a new
+are pending. It checks hourly and merges only after **7 days without a new
 testing push**, successful Testing CI and other push CI/statuses for the current
 head, and a conflict-free merge. Duplicate PR runs held by GitHub for bot
 approval do not replace the mandatory push validation; GitHub still enforces
@@ -25,7 +25,7 @@ uses a normal merge commit and leaves `testing` in place. Keep the repository's
 automatic head-branch deletion setting off. No release tags are created.
 
 If the release branch has advanced independently, the controller normally merges
-it into testing first, runs validation, and restarts the 72-hour period. Conflicts
+it into testing first, runs validation, and restarts the seven-day period. Conflicts
 require maintainer resolution. This preserves history and validates the combined
 candidate rather than publishing against an untested release baseline.
 
@@ -34,7 +34,7 @@ run does not restart its timer; a new manual dispatch on testing deliberately
 starts a fresh conservative timer. Bot pushes may not trigger another workflow,
 so bots must dispatch Testing CI after pushing. The hourly controller dispatches
 it if the current testing head has no push receipt. Scheduler/runner delays may
-make promotion later than 72 hours; it never intentionally happens earlier.
+make promotion later than 7 days; it never intentionally happens earlier.
 
 The workflow files and controller must exist on `main` as well as testing.
 Actions needs permission to create PRs, merge repository contents, manage the pause
@@ -45,5 +45,5 @@ or external service. The privileged controller executes only from `main`;
 candidate validation uses a read-only token with checkout credentials disabled.
 
 Validation includes static/schema checks, available regressions and packaging.
-It is not a native GNOME desktop test. Use the three-day period for actual desktop
+It is not a native GNOME desktop test. Use the seven-day period for actual desktop
 testing; apply the pause label whenever behavior needs more investigation.
