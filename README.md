@@ -1,7 +1,5 @@
 # Media Controller — GNOME 46 fork
 
-Maintainer's own space: [HUMANS.md](HUMANS.md), reserved for Eidrien's writing.
-
 GNOME 46 compatibility and convenience fork of
 [naimur900/media-controller-gnome](https://github.com/naimur900/media-controller-gnome),
 based on upstream commit `07c66b5` (3.4). The formal GitHub fork relationship and
