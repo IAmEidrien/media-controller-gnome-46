@@ -136,3 +136,21 @@ test('pending pause acknowledgements do not look like a browser starting again',
     manager._noteStatus(browser);
     assert.equal(manager._statuses.get('browser'), 'Paused');
 });
+
+test('yielding exclusive playback tracks status without pauses or replaying missed starts', () => {
+    const {manager, player} = fixture();
+    const music = player('music', 'Playing');
+    const video = player('video');
+    manager.exclusivePlayback = false;
+    video.status = 'Playing';
+    manager._noteStatus(video);
+    manager._selectActive();
+    assert.equal(music.pauses, 0);
+    assert.equal(video.pauses, 0);
+    manager.exclusivePlayback = true;
+    manager._noteStatus(video);
+    assert.equal(music.pauses, 0, 'removing the override does not replay old transitions');
+    video.status = 'Paused'; manager._noteStatus(video);
+    video.status = 'Playing'; manager._noteStatus(video);
+    assert.equal(music.pauses, 1, 'future starts use the restored preference');
+});

@@ -116,7 +116,12 @@ enabling it sends track information when the lyrics panel is opened.
 - **One player at a time**: starting playback in one player pauses whichever
   other player was playing, so hitting play in VLC no longer leaves Spotify
   running underneath it. Players already playing when the extension starts are
-  left alone, and the whole behavior can be switched off.
+  left alone, and the whole behavior can be switched off. While **Smart Pause &
+  Resume** is enabled, Media Controller automatically disables this behavior and
+  its preferences switch, leaving automatic pausing/resuming to that extension.
+  This also respects its Quick Settings toggle: turning Smart Pause off does not
+  silently activate Media Controller's replacement. Disable the Smart Pause &
+  Resume extension itself to restore the saved Media Controller preference.
 - **Shuffle and loop** control the player directly: shuffle toggles on and off,
   loop cycles between off, repeating the whole queue, and repeating one track,
   and an engaged mode uses the Shell theme's accent color.

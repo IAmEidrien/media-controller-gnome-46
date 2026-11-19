@@ -11,6 +11,7 @@ import {ExtensionPreferences, gettext as _} from
 
 import {artCacheDir} from './paths.js';
 import {CLICK_ACTIONS} from './panelActions.js';
+import {SmartPauseClient} from './smartPause.js';
 
 /* Batches keep a large cache from blocking the main loop. */
 const ENUMERATE_BATCH = 64;
@@ -65,6 +66,45 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
         window.add(this._panelPage(settings));
         window.add(this._cardPage(settings));
         window.add(this._maintenancePage(settings, window));
+        const client = new SmartPauseClient(blocked => {
+            this._smartPauseBlocked = blocked;
+            this._syncExclusiveRow();
+        });
+        window.connect('close-request', () => {
+            client.destroy();
+            settings.disconnect(this._exclusiveSettingsSignal);
+            return false;
+        });
+    }
+
+    _exclusiveRow(settings) {
+        this._exclusiveSettings = settings;
+        this._exclusiveSubtitle = _('When a player starts playing, pause whichever other player was playing. Players already running when the extension starts are left alone.');
+        const row = new Adw.SwitchRow({title: _('Play one player at a time'), use_markup: false});
+        this._exclusiveRowWidget = row;
+        row.connect('notify::active', () => {
+            if (!this._syncingExclusive && !this._smartPauseBlocked)
+                settings.set_boolean('pause-others-on-play', row.active);
+        });
+        this._exclusiveSettingsSignal = settings.connect('changed::pause-others-on-play',
+            () => this._syncExclusiveRow());
+        this._syncExclusiveRow();
+        return row;
+    }
+
+    _syncExclusiveRow() {
+        const row = this._exclusiveRowWidget;
+        this._syncingExclusive = true;
+        try {
+            row.active = !this._smartPauseBlocked &&
+                this._exclusiveSettings.get_boolean('pause-others-on-play');
+            row.sensitive = !this._smartPauseBlocked;
+            row.subtitle = this._smartPauseBlocked
+                ? _('Disabled while Smart Pause & Resume is enabled. Manage automatic playback there; your preference here is saved.')
+                : this._exclusiveSubtitle;
+        } finally {
+            this._syncingExclusive = false;
+        }
     }
 
     _switchRow(settings, key, title, subtitle = null) {
@@ -237,9 +277,7 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
         multiple.add(this._switchRow(settings, 'card-show-player-switcher',
             _('Player switcher'),
             _('A button beside the volume bar names the player on screen, and lists every running player, with what each is playing, for choosing which one the card and panel follow.')));
-        multiple.add(this._switchRow(settings, 'pause-others-on-play',
-            _('Play one player at a time'),
-            _('When a player starts playing, pause whichever other player was playing. Players already running when the extension starts are left alone.')));
+        multiple.add(this._exclusiveRow(settings));
         page.add(multiple);
 
         const playback = new Adw.PreferencesGroup({
