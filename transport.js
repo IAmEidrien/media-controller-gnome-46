@@ -78,3 +78,18 @@ export function syncHover(actor) {
     }
     actor.hover = hovered;
 }
+
+/* The shell's own volume thresholds: muted only at zero, then thirds. */
+const VOLUME_ICONS = [
+    'audio-volume-muted-symbolic',
+    'audio-volume-low-symbolic',
+    'audio-volume-medium-symbolic',
+    'audio-volume-high-symbolic',
+];
+
+/* volume is 0 to 1, or past it on players that amplify. */
+export function volumeIconName(volume) {
+    if (volume <= 0)
+        return VOLUME_ICONS[0];
+    return VOLUME_ICONS[Math.min(3, Math.ceil(volume * 3))];
+}
