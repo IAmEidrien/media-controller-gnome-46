@@ -438,7 +438,7 @@ test('Panel preferences order, schema choices and dependent symbolic switch stay
     f.settings.set_string('left-click-action', 'menu');
     assert.equal(actions.children[0].selected, nicks.indexOf('menu'));
 
-    const track = panel.children[3];
+    const track = panel.children.find(group => group.title === 'Track information');
     assert.equal(track.children[0].title, 'Player icon');
     const symbolic = track.children[1];
     assert.equal(symbolic.title, 'Prefer symbolic icons');
