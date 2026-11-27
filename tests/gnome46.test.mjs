@@ -169,6 +169,8 @@ function fixture() {
         GLib: {PRIORITY_DEFAULT: 0, get_monotonic_time: () => 0,
             timeout_add: () => 1, timeout_add_seconds: () => 2, Source: {remove() {}}},
         Main: {},
+        Gvc: {MixerControlState: {READY: 1}},
+        PlayerKind: {BROWSER: 'browser'},
         SmartPauseClient: class {
             constructor(changed) { this.changed = changed; api.smartPauseClient = this; }
             destroy() { this.destroyed = true; }
@@ -185,7 +187,7 @@ function fixture() {
         }),
     };
     Object.assign(api, load('transport.js', ['US_PER_SECOND', 'loopIconName', 'nextLoopStatus',
-        'playPauseIconName', 'seekOffset', 'setToggleStyle', 'setReactive', 'syncHover'], api));
+        'playPauseIconName', 'seekOffset', 'setToggleStyle', 'setReactive', 'syncHover', 'volumeIconName'], api));
     Object.assign(api, load('panelActions.js', ['CLICK_ACTIONS', 'activatePanelAction'], api));
     Object.assign(api, load('compat.js', ['boxOrientation'], api));
     Object.assign(api, load('lyricsPanel.js', ['LyricsPanel', 'lyricsIcon'], api));
@@ -195,6 +197,8 @@ function fixture() {
     Object.assign(api, load('cardList.js', ['CardList'], api));
     Object.assign(api, load('playerList.js', ['PlayerList'], api));
     Object.assign(api, load('outputList.js', ['OutputList'], api));
+    Object.assign(api, load('playerVolume.js', ['StreamVolume'], api));
+    Object.assign(api, load('shellMediaControls.js', ['ShellMediaControls'], api));
     Object.assign(api, load('mediaCard.js', ['MediaCard'], api));
     Object.assign(api, load('smartPause.js', ['smartPauseEnabled', 'SmartPauseWatcher', 'SMART_PAUSE_UUID'], api));
     const {MediaIndicator, MediaControlsExtension} = load('extension.js', ['MediaIndicator', 'MediaControlsExtension'], api);
@@ -205,11 +209,17 @@ function fixture() {
     manager.cyclePlayer = () => {};
     manager.selectPlayer = () => {};
     let preferencesOpened = 0;
-    const outputs = Object.assign(new Signals(), {outputs: [], active: null, activeId: null});
+    const mixer = Object.assign(new Signals(), {
+        get_state: () => api.Gvc.MixerControlState.READY,
+        get_sink_inputs: () => mixer.streams,
+        get_vol_max_norm: () => 100,
+        streams: [],
+    });
+    const outputs = Object.assign(new Signals(), {outputs: [], active: null, activeId: null, mixer});
     const indicator = new MediaIndicator({openPreferences() { preferencesOpened++; }}, settings,
         {resolve: async () => null}, {lookup: async () => null}, manager, outputs);
     return {api, values, settings, indicator, manager, boxes, MediaControlsPreferences, MediaControlsExtension,
-        preferencesOpened: () => preferencesOpened};
+        mixer, preferencesOpened: () => preferencesOpened};
 }
 
 test('output rows retain GNOME 46 accents and selection sends no playback commands', () => {
@@ -778,4 +788,56 @@ test('Smart Pause owns automatic playback while enabled; preferences retain the 
     watcher.destroy();
     watcher.destroy();
     assert.equal(extensions.listeners.size, 0);
+});
+
+test('browser volume follows and releases only the matching audio streams', () => {
+    const f = fixture();
+    const stream = (id, name, volume) => Object.assign(new Signals(), {
+        id, volume, is_muted: false,
+        get_name: () => name,
+        get_icon_name: () => null,
+        set_volume(value) { this.volume = value; return true; },
+        change_is_muted(value) { this.is_muted = value; },
+        push_volume() { this.emit('notify::volume'); },
+    });
+    const browser = stream(1, 'Firefox', 70);
+    const other = stream(2, 'VLC', 60);
+    f.mixer.streams = [browser, other];
+    const card = f.indicator._card;
+    card.setPlayer(Object.assign(new Signals(), {
+        busName: 'org.mpris.MediaPlayer2.firefox', identity: 'Firefox',
+        displayTitle: 'Track', displayName: 'Firefox', title: 'Track',
+        desktopEntry: 'org.mozilla.firefox', kind: f.api.PlayerKind.BROWSER,
+        artist: '', album: '', appIcon: {}, hasAppIcon: true, artUrl: null,
+        length: 0, volume: null, canSetVolume: false, isPlaying: false,
+        getPosition: async () => 0,
+    }));
+    assert.equal(card._volumeBox.visible, true);
+    assert.equal(card._volumeSlider.value, 0.7);
+    card._volumeSlider.value = 0.3;
+    card._volumeSlider.emit('notify::value');
+    assert.equal(browser.volume, 30);
+    assert.equal(other.volume, 60);
+    f.mixer.streams = [other];
+    f.mixer.emit('stream-removed', browser.id);
+    assert.equal(card._volumeSlider.reactive, false);
+    assert.equal(card._volumeBox.visible, true);
+    card.destroy();
+    assert.equal(browser.listeners.size, 0);
+    assert.equal(f.mixer.listeners.size, 0);
+});
+
+test('hiding GNOME 46 media controls restores the original section predicate', () => {
+    const {api} = fixture();
+    const prototype = {
+        _shouldShow() { return true; },
+        _sync() { this.visible = this._shouldShow(); },
+    };
+    const section = Object.create(prototype);
+    const controls = new api.ShellMediaControls({_mediaSection: section});
+    controls.setHidden(true);
+    assert.equal(section.visible, false);
+    controls.destroy();
+    assert.equal(section.visible, true);
+    assert.equal(Object.hasOwn(section, '_shouldShow'), false);
 });
