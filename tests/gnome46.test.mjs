@@ -417,7 +417,9 @@ test('Panel preferences order, schema choices and dependent symbolic switch stay
     const prefs = new f.MediaControlsPreferences();
     const panel = prefs._panelPage(f.settings);
     assert.deepEqual(panel.children.map(group => group.title),
-        ['Placement', 'Actions', 'Playback controls', 'Track information', 'Scrolling text']);
+        ['Placement', 'Actions', 'Playback controls', 'Notification list',
+            'Track information', 'Scrolling text']);
+    assert.equal(f.values['hide-shell-media-controls'], false);
     const actions = panel.children[1];
     assert.deepEqual(actions.children.map(row => row.title),
         ['Left click', 'Middle click', 'Right click', 'Back button', 'Forward button', 'Scroll up', 'Scroll down']);
