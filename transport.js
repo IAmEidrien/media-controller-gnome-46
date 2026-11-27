@@ -93,3 +93,19 @@ export function volumeIconName(volume) {
         return VOLUME_ICONS[0];
     return VOLUME_ICONS[Math.min(3, Math.ceil(volume * 3))];
 }
+
+/* Ignore horizontal gestures. One vertical wheel notch is one step. */
+export function verticalScrollDelta(event) {
+    switch (event.get_scroll_direction()) {
+    case Clutter.ScrollDirection.UP:
+        return -1;
+    case Clutter.ScrollDirection.DOWN:
+        return 1;
+    case Clutter.ScrollDirection.SMOOTH: {
+        const [dx, dy] = event.get_scroll_delta();
+        return Number.isFinite(dy) && Math.abs(dy) >= Math.abs(dx) ? dy : 0;
+    }
+    default:
+        return 0;
+    }
+}

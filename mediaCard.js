@@ -22,7 +22,7 @@ import { PlayerList } from './playerList.js';
 import { StreamVolume } from './playerVolume.js';
 import {
     US_PER_SECOND, loopIconName, nextLoopStatus, playPauseIconName,
-    seekOffset, setReactive, setToggleStyle, syncHover, volumeIconName
+    seekOffset, setReactive, setToggleStyle, syncHover, verticalScrollDelta, volumeIconName
 } from './transport.js';
 
 const POSITION_POLL_SECONDS = 1;
@@ -157,6 +157,7 @@ export const MediaCard = GObject.registerClass({
         'open-preferences': {},
         /* Carries the picked player's MPRIS bus name. */
         'player-selected': {param_types: [GObject.TYPE_STRING]},
+        'player-cycle': {param_types: [GObject.TYPE_INT]},
         /* Carries the picked sound output's mixer id. */
         'output-selected': {param_types: [GObject.TYPE_UINT]},
         /* Carries the backdrop's edge color as CSS, or '' for the plain card. */
@@ -368,8 +369,11 @@ export const MediaCard = GObject.registerClass({
         this._pickerButton.can_focus = choice;
         setReactive(this._pickerButton, choice);
 
-        if (!choice && this._popup === this._playerPopup)
-            this._closePopup();
+        if (!choice) {
+            this._pickerScrollDelta = 0;
+            if (this._popup === this._playerPopup)
+                this._closePopup();
+        }
         this._updateFooter();
     }
 
@@ -703,8 +707,40 @@ export const MediaCard = GObject.registerClass({
             accessible_name: _('Switch player'),
             child: box,
         });
-        this._pickerButton.connect('clicked',
-            () => this._togglePopup(this._playerPopup));
+        this._pickerScrollDelta = 0;
+        this._pickerButton.connect('clicked', () => {
+            this._pickerScrollDelta = 0;
+            this._togglePopup(this._playerPopup);
+        });
+        this._pickerButton.connect('scroll-event', (_button, event) =>
+            this._scrollPicker(event));
+        this._pickerButton.connect('leave-event', () => {
+            this._pickerScrollDelta = 0;
+            return Clutter.EVENT_PROPAGATE;
+        });
+        this._pickerButton.connect('notify::mapped', () => {
+            if (!this._pickerButton.mapped)
+                this._pickerScrollDelta = 0;
+        });
+    }
+
+    _scrollPicker(event) {
+        if (!this._pickerButton.reactive || this._popup)
+            return Clutter.EVENT_PROPAGATE;
+
+        const delta = verticalScrollDelta(event);
+        if (delta === 0)
+            return Clutter.EVENT_PROPAGATE;
+
+        if (Math.sign(delta) !== Math.sign(this._pickerScrollDelta))
+            this._pickerScrollDelta = 0;
+        this._pickerScrollDelta += delta;
+        const direction = Math.sign(this._pickerScrollDelta);
+        const steps = Math.trunc(this._pickerScrollDelta + direction * 1e-6);
+        this._pickerScrollDelta -= steps;
+        for (let i = 0; i < Math.abs(steps); i++)
+            this.emit('player-cycle', direction);
+        return Clutter.EVENT_STOP;
     }
 
     /* The system's sound output, not the player's: picking one moves every app

@@ -25,7 +25,7 @@ import {SoundOutputs} from './soundOutputs.js';
 import {smartPauseEnabled, SmartPauseWatcher} from './smartPause.js';
 import {UpdateNotice} from './updateNotice.js';
 import {loopIconName, nextLoopStatus, playPauseIconName, seekOffset,
-    setReactive, setToggleStyle} from './transport.js';
+    setReactive, setToggleStyle, verticalScrollDelta} from './transport.js';
 
 const ROLE = 'media-controls';
 // Conventional extra mouse buttons; wheel events remain separate scroll input.
@@ -115,6 +115,8 @@ class MediaIndicator extends PanelMenu.Button {
             /* The menu stays open: you switch players to look at the other one. */
             'player-selected', (_card, busName) =>
                 this._manager.selectPlayer(busName),
+            'player-cycle', (_card, direction) =>
+                this._manager.cyclePlayer(direction),
             /* Switch the system output without issuing playback commands. */
             'output-selected', (_card, id) => {
                 soundOutputs.select(id);
@@ -306,24 +308,9 @@ class MediaIndicator extends PanelMenu.Button {
      * Smooth wheels/trackpads emit fractions of a tick: accumulate them rather
      * than changing volume by 5% for every tiny packet. No timer is needed. */
     _onScroll(event) {
-        let delta;
-        switch (event.get_scroll_direction()) {
-        case Clutter.ScrollDirection.UP:
-            delta = -1;
-            break;
-        case Clutter.ScrollDirection.DOWN:
-            delta = 1;
-            break;
-        case Clutter.ScrollDirection.SMOOTH: {
-            const [dx, dy] = event.get_scroll_delta();
-            if (!Number.isFinite(dy) || dy === 0 || Math.abs(dx) > Math.abs(dy))
-                return Clutter.EVENT_PROPAGATE;
-            delta = dy;
-            break;
-        }
-        default:
+        const delta = verticalScrollDelta(event);
+        if (delta === 0)
             return Clutter.EVENT_PROPAGATE;
-        }
 
         const player = this._manager.activePlayer;
         if (player !== this._scrollPlayer) {

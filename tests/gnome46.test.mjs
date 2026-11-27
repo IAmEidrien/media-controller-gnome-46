@@ -158,7 +158,7 @@ function fixture() {
             BUTTON_PRIMARY: 1, BUTTON_MIDDLE: 2, BUTTON_SECONDARY: 3,
             EVENT_PROPAGATE: 0, EVENT_STOP: 1,
             BinLayout: class {}, FixedLayout: class {}, AnimationMode: {LINEAR: 0}},
-        GObject: {registerClass: (...args) => args.at(-1), TYPE_STRING: 0},
+        GObject: {registerClass: (...args) => args.at(-1), TYPE_STRING: 0, TYPE_INT: 1},
         Pango: {EllipsizeMode: {END: 0, NONE: 1}, WrapMode: {WORD_CHAR: 0}},
         // No ButtonRow: it is not part of libadwaita 1.5.
         Adw: {PreferencesPage: Actor, PreferencesGroup: Actor, ActionRow: Actor,
@@ -187,7 +187,7 @@ function fixture() {
         }),
     };
     Object.assign(api, load('transport.js', ['US_PER_SECOND', 'loopIconName', 'nextLoopStatus',
-        'playPauseIconName', 'seekOffset', 'setToggleStyle', 'setReactive', 'syncHover', 'volumeIconName'], api));
+        'playPauseIconName', 'seekOffset', 'setToggleStyle', 'setReactive', 'syncHover', 'verticalScrollDelta', 'volumeIconName'], api));
     Object.assign(api, load('panelActions.js', ['CLICK_ACTIONS', 'activatePanelAction'], api));
     Object.assign(api, load('compat.js', ['boxOrientation'], api));
     Object.assign(api, load('lyricsPanel.js', ['LyricsPanel', 'lyricsIcon'], api));
@@ -842,4 +842,51 @@ test('hiding GNOME 46 media controls restores the original section predicate', (
     controls.destroy();
     assert.equal(section.visible, true);
     assert.equal(Object.hasOwn(section, '_shouldShow'), false);
+});
+
+test('scrolling the card player button cycles sources with the list closed', () => {
+    const f = fixture();
+    const card = f.indicator._card;
+    const button = card._pickerButton;
+    const players = [
+        Object.assign(new Signals(), {busName: 'alpha', displayName: 'Alpha'}),
+        Object.assign(new Signals(), {busName: 'beta', displayName: 'Beta'}),
+    ];
+    const cycles = [];
+    let index = 0;
+    const {ScrollDirection, EVENT_PROPAGATE, EVENT_STOP} = f.api.Clutter;
+    f.indicator.menu.isOpen = true;
+    card.setPlayers(players, players[index]);
+    f.manager.cyclePlayer = direction => {
+        cycles.push(direction);
+        index = (index + players.length + direction) % players.length;
+        card.setPlayers(players, players[index]);
+    };
+    const handler = [...button.listeners.values()].find(l => l.name === 'scroll-event');
+    const scroll = (direction, dx = 0, dy = 0) =>
+        handler.callback(button, {
+            get_scroll_direction: () => direction,
+            get_scroll_delta: () => [dx, dy],
+        });
+
+    assert.equal(scroll(ScrollDirection.DOWN), EVENT_STOP);
+    assert.equal(card._pickerLabel.text, 'Beta');
+    assert.equal(scroll(ScrollDirection.UP), EVENT_STOP);
+    assert.equal(card._pickerLabel.text, 'Alpha');
+    assert.equal(scroll(ScrollDirection.SMOOTH, 1, 0.5), EVENT_PROPAGATE);
+
+    scroll(ScrollDirection.SMOOTH, 0, 0.75);
+    button.emit('leave-event');
+    scroll(ScrollDirection.SMOOTH, 0, 0.25);
+    assert.deepEqual(cycles, [1, -1]);
+    scroll(ScrollDirection.SMOOTH, 0, 0.75);
+    assert.deepEqual(cycles, [1, -1, 1]);
+    assert.equal(card._pickerLabel.text, 'Beta');
+    assert.ok(!card._popup);
+    assert.equal(card._playerList.opacity, 0);
+    assert.equal(f.indicator.menu.isOpen, true);
+
+    card.setPlayers([players[0]], players[0]);
+    assert.equal(scroll(ScrollDirection.DOWN), EVENT_PROPAGATE);
+    assert.deepEqual(cycles, [1, -1, 1]);
 });
