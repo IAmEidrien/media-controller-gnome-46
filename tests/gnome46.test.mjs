@@ -18,6 +18,7 @@ function load(file, names, api) {
 
 class Signals {
     listeners = new Map();
+    blocked = new Set();
     nextId = 1;
     connect(name, callback) {
         const id = this.nextId++;
@@ -27,7 +28,8 @@ class Signals {
     disconnect(id) { assert.ok(this.listeners.delete(id)); }
     emit(name, ...args) {
         for (const listener of [...this.listeners.values()]) {
-            if (listener.name === name) listener.callback(this, ...args);
+            if (listener.name === name && !this.blocked.has(listener))
+                listener.callback(this, ...args);
         }
     }
     connectObject(...args) {
@@ -77,8 +79,8 @@ class Actor extends Signals {
     set_height(height) { this.height = height; }
     get_preferred_height() { return [0, 300]; }
     get_theme_node() { return {get_vertical_padding: () => 0}; }
-    block_signal_handler() {}
-    unblock_signal_handler() {}
+    block_signal_handler(id) { this.blocked.add(this.listeners.get(id)); }
+    unblock_signal_handler(id) { this.blocked.delete(this.listeners.get(id)); }
     show() { this.visible = true; }
     hide() { this.visible = false; }
     set_pivot_point() {}
@@ -126,6 +128,23 @@ function fixture() {
         }
     }
     const settings = new Settings();
+    values['allow-volume-above-100-percent'] = false;
+    const soundSettings = new Settings();
+    class Slider extends Actor {
+        _init(value) {
+            super._init();
+            this.maximum_value = 1;
+            this.value = value;
+        }
+        get value() { return this._value; }
+        set value(value) {
+            const next = Math.max(0, Math.min(value, this.maximum_value));
+            if (next === this._value)
+                return;
+            this._value = next;
+            this.emit('notify::value');
+        }
+    }
     class Menu extends Signals {
         box = new BoxLayout({vertical: true});
         isOpen = false;
@@ -167,7 +186,12 @@ function fixture() {
             SwitchRow: Actor, ComboRow: Actor, SpinRow: Actor},
         Gtk: {Button: Actor, Adjustment: Actor, Align: {CENTER: 0},
             StringList: {new: labels => labels}},
-        Gio: {FileIcon: Actor, File: {new_for_uri: () => ({get_parent: () => ({resolve_relative_path: path => path})})}, SettingsBindFlags: {DEFAULT: 0, GET: 1}, FileQueryInfoFlags: {NONE: 0}},
+        Gio: {Settings: class {
+            constructor({schema_id}) {
+                assert.equal(schema_id, 'org.gnome.desktop.sound');
+                return soundSettings;
+            }
+        }, FileIcon: Actor, File: {new_for_uri: () => ({get_parent: () => ({resolve_relative_path: path => path})})}, SettingsBindFlags: {DEFAULT: 0, GET: 1}, FileQueryInfoFlags: {NONE: 0}},
         GLib: {PRIORITY_DEFAULT: 0, get_monotonic_time: () => 0,
             timeout_add: () => 1, timeout_add_seconds: () => 2, Source: {remove() {}}},
         Main: {},
@@ -179,7 +203,7 @@ function fixture() {
         },
         Extension: class {},
         ExtensionPreferences: class {getSettings() { return settings; }},
-        Slider: Actor,
+        Slider,
         PanelMenu: {Button: PanelButton},
         PopupMenu: {PopupBaseMenuItem: Actor},
         BackdropMaker: class {make() { return Promise.resolve(null); } destroy() {}},
@@ -215,13 +239,14 @@ function fixture() {
         get_state: () => api.Gvc.MixerControlState.READY,
         get_sink_inputs: () => mixer.streams,
         get_vol_max_norm: () => 100,
+        get_vol_max_amplified: () => 150,
         streams: [],
     });
     const outputs = Object.assign(new Signals(), {outputs: [], active: null, activeId: null, mixer});
     const indicator = new MediaIndicator({openPreferences() { preferencesOpened++; }}, settings,
         {resolve: async () => null}, {lookup: async () => null}, manager, outputs);
     return {api, values, settings, indicator, manager, boxes, MediaControlsPreferences, MediaControlsExtension,
-        mixer, preferencesOpened: () => preferencesOpened};
+        mixer, soundSettings, preferencesOpened: () => preferencesOpened};
 }
 
 test('output rows retain GNOME 46 accents and selection sends no playback commands', () => {
@@ -741,7 +766,6 @@ test('new card volume slider follows player capabilities and the fork accent', (
     assert.equal(card._volumeBox.visible, true);
     assert.equal(card._volumeSlider.value, 0.5);
     card._volumeSlider.value = 0.7;
-    card._volumeSlider.emit('notify::value');
     assert.deepEqual(writes, [0.7]);
     card.setAccentColor('rgba(224, 27, 36, 1)');
     assert.match(card._volumeSlider.style, /-barlevel-active-background-color: rgba\(224, 27, 36, 1\)/);
@@ -752,6 +776,52 @@ test('new card volume slider follows player capabilities and the fork accent', (
     assert.equal(card._volumeHoldId, 0);
 });
 
+
+test('card follows the Shell overamplification setting without writing volume on toggle', () => {
+    const f = fixture();
+    const card = f.indicator._card;
+    const slider = card._volumeSlider;
+    const color = 'rgba(224, 27, 36, 1)';
+    const key = 'allow-volume-above-100-percent';
+    const writes = [];
+    const player = Object.assign(new Signals(), {
+        busName: 'player', displayTitle: 'Track', displayName: 'Player', title: 'Track',
+        artist: '', album: '', appIcon: {}, hasAppIcon: true, artUrl: null,
+        length: 0, volume: 1.3, canSetVolume: true, isPlaying: false,
+        getPosition: async () => 0,
+        setVolume: (value, maximum) => writes.push([value, maximum]),
+    });
+    card.setPlayer(player);
+    card.setAccentColor(color);
+    assert.equal(slider.maximum_value, 1);
+    assert.equal(slider.value, 1);
+    assert.equal(slider.has_style_class_name('mc-volume-normal'), true);
+    assert.equal(slider.style, `color: ${color}; -barlevel-active-background-color: ${color};`);
+
+    f.soundSettings.set_boolean(key, true);
+    assert.equal(slider.maximum_value, 1.5);
+    assert.equal(slider.value, 1.3);
+    assert.equal(card._volumeIcon.icon_name, 'audio-volume-overamplified-symbolic');
+    assert.equal(slider.has_style_class_name('mc-volume-normal'), false);
+    assert.equal(slider.style, `-barlevel-active-background-color: ${color};`);
+    assert.equal(card._slider.maximum_value, 1, 'the seek slider does not gain an amplified range');
+    assert.deepEqual(writes, []);
+
+    slider.value = 1;
+    assert.equal(card._volumeIcon.icon_name, 'audio-volume-high-symbolic');
+    slider.value = 1.4;
+    assert.equal(card._volumeIcon.icon_name, 'audio-volume-overamplified-symbolic');
+    f.soundSettings.set_boolean(key, false);
+    assert.equal(slider.maximum_value, 1);
+    assert.equal(slider.value, 1);
+    assert.equal(card._volumeIcon.icon_name, 'audio-volume-high-symbolic');
+    assert.equal(slider.has_style_class_name('mc-volume-normal'), true);
+    assert.equal(card._volumeHoldId, 0);
+    assert.deepEqual(writes, [[1, 1.5], [1.4, 1.5]]);
+
+    card.destroy();
+    assert.equal(f.soundSettings.listeners.size, 0);
+});
 
 test('Smart Pause owns automatic playback while enabled; preferences retain the saved choice', () => {
     const f = fixture();
@@ -818,8 +888,14 @@ test('browser volume follows and releases only the matching audio streams', () =
     }));
     assert.equal(card._volumeBox.visible, true);
     assert.equal(card._volumeSlider.value, 0.7);
+    f.soundSettings.set_boolean('allow-volume-above-100-percent', true);
+    card._volumeSlider.value = 1.4;
+    assert.equal(browser.volume, 140);
+    assert.equal(other.volume, 60);
+    f.soundSettings.set_boolean('allow-volume-above-100-percent', false);
+    assert.equal(card._volumeSlider.value, 1);
+    assert.equal(browser.volume, 140, 'disabling overamplification does not write a volume');
     card._volumeSlider.value = 0.3;
-    card._volumeSlider.emit('notify::value');
     assert.equal(browser.volume, 30);
     assert.equal(other.volume, 60);
     f.mixer.streams = [other];

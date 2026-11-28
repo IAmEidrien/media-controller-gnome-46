@@ -3,6 +3,7 @@
  * indicator is clicked. */
 
 import Clutter from 'gi://Clutter';
+import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Pango from 'gi://Pango';
@@ -26,6 +27,7 @@ import {
 } from './transport.js';
 
 const POSITION_POLL_SECONDS = 1;
+const ALLOW_AMPLIFIED_VOLUME = 'allow-volume-above-100-percent';
 const PICKER_REPEAT_INTERVAL_US = 120_000;
 
 /* The title wraps, so the card is as tall as the text needs. Podcast and DJ-set
@@ -970,26 +972,73 @@ export const MediaCard = GObject.registerClass({
          * straight back. */
         this._volumeChangedId = this._volumeSlider.connect('notify::value', () => {
             const volume = this._volumeSlider.value;
+            const maximum = this._volumeSlider.maximum_value;
             /* Held before writing: a stream announces its new volume during
              * the write, and moving the slider from inside this handler would
              * have GLib replay the change once the block is lifted. */
             this._holdVolume();
             if (this._player?.canSetVolume)
-                this._player.setVolume(volume);
+                this._player.setVolume(volume, maximum);
             else
-                this._streamVolume.setLevel(volume);
-            this._volumeIcon.icon_name = volumeIconName(volume);
+                this._streamVolume.setLevel(volume, maximum);
+            this._updateVolumeIcon(volume);
         });
 
         this._volumeBox.add_child(this._volumeIcon);
         this._volumeBox.add_child(this._volumeSlider);
+
+        this._soundSettings = new Gio.Settings({schema_id: 'org.gnome.desktop.sound'});
+        this._amplificationChangedId = this._soundSettings.connect(
+            `changed::${ALLOW_AMPLIFIED_VOLUME}`, () => this._updateVolumeRange());
+        this._updateVolumeRange();
+    }
+
+    _updateVolumeRange() {
+        let maximum = 1;
+        if (this._soundSettings.get_boolean(ALLOW_AMPLIFIED_VOLUME)) {
+            const mixer = this._soundOutputs.mixer;
+            const ratio = mixer.get_vol_max_amplified() / mixer.get_vol_max_norm();
+            if (Number.isFinite(ratio))
+                maximum = Math.max(1, Math.min(ratio, 2));
+        }
+
+        // Shell's Slider draws the themed overdrive region beyond its default
+        // overdrive-start of 1. Keep 1 as normal volume in both modes.
+        this._volumeSlider.maximum_value = maximum;
+        if (maximum > 1)
+            this._volumeSlider.remove_style_class_name('mc-volume-normal');
+        else
+            this._volumeSlider.add_style_class_name('mc-volume-normal');
+        this._applyVolumeAccent();
+
+        // Changing the setting updates the display without writing a volume.
+        this._clearVolumeHold();
+        this._syncVolume();
+    }
+
+    _applyVolumeAccent() {
+        const color = this._accentColor;
+        const thumb = this._volumeSlider.maximum_value > 1 ? '' : `color: ${color}; `;
+        this._volumeSlider.set_style(color
+            ? `${thumb}-barlevel-active-background-color: ${color};` : null);
+    }
+
+    _updateVolumeIcon(volume) {
+        this._volumeIcon.icon_name = this._volumeSlider.maximum_value > 1 && volume > 1
+            ? 'audio-volume-overamplified-symbolic' : volumeIconName(volume);
+    }
+
+    _clearVolumeHold() {
+        if (this._volumeHoldId) {
+            GLib.Source.remove(this._volumeHoldId);
+            this._volumeHoldId = 0;
+        }
     }
 
     /* Keep the user's value until the writes have echoed back, then take the
      * player's, which also corrects a clamped or refused change. */
     _holdVolume() {
-        if (this._volumeHoldId)
-            GLib.Source.remove(this._volumeHoldId);
+        this._clearVolumeHold();
         this._volumeHoldId = GLib.timeout_add(GLib.PRIORITY_DEFAULT,
             VOLUME_HOLD_MS, () => {
                 this._volumeHoldId = 0;
@@ -1015,7 +1064,7 @@ export const MediaCard = GObject.registerClass({
         this._volumeSlider.block_signal_handler(this._volumeChangedId);
         this._volumeSlider.value = volume;
         this._volumeSlider.unblock_signal_handler(this._volumeChangedId);
-        this._volumeIcon.icon_name = volumeIconName(volume);
+        this._updateVolumeIcon(this._volumeSlider.value);
     }
 
     _setVolumeLive(live) {
@@ -1364,7 +1413,7 @@ export const MediaCard = GObject.registerClass({
         this._positionLabel.set_style(`color: ${color};`);
         this._remainingLabel.set_style(`color: ${color};`);
         this._slider.set_style(`-barlevel-active-background-color: ${color};`);
-        this._volumeSlider.set_style(`color: ${color}; -barlevel-active-background-color: ${color};`);
+        this._applyVolumeAccent();
         this._playerList.setAccentColor(color);
         this._outputList.setAccentColor(color);
         this._applyArtStyle();
@@ -1406,10 +1455,8 @@ export const MediaCard = GObject.registerClass({
             GLib.Source.remove(this._seekRefreshId);
             this._seekRefreshId = 0;
         }
-        if (this._volumeHoldId) {
-            GLib.Source.remove(this._volumeHoldId);
-            this._volumeHoldId = 0;
-        }
+        this._clearVolumeHold();
+        this._soundSettings.disconnect(this._amplificationChangedId);
         this._disconnectPlayer();
         this._streamVolume.destroy();
         for (const id of this._settingsSignals)

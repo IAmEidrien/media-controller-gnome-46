@@ -78,11 +78,11 @@ function streamLevel(stream, norm) {
 
 /* Each stream moves by the same step, so a browser's tabs keep their balance.
  * The loudest determines the level displayed by the card. */
-function moveStreams(mixer, streams, delta) {
+function moveStreams(mixer, streams, delta, maximum) {
     const norm = mixer.get_vol_max_norm();
     for (const stream of streams) {
         const current = streamLevel(stream, norm);
-        const maxLevel = Math.max(1, current);
+        const maxLevel = Math.max(maximum, current);
         const level = clamp(current + delta, 0, maxLevel);
         setStreamVolume(stream, Math.round(level * norm));
     }
@@ -134,12 +134,13 @@ export class StreamVolume {
     }
 
     /* Brings the loudest stream to level, moving the others as far. */
-    setLevel(level) {
+    setLevel(level, maximum = 1) {
         const current = this.level;
-        if (current === null)
+        if (current === null || !Number.isFinite(level) ||
+            !Number.isFinite(maximum) || maximum < 1)
             return;
         const streams = [...this._streams.values()].map(({stream}) => stream);
-        moveStreams(this._mixer, streams, level - current);
+        moveStreams(this._mixer, streams, clamp(level, 0, maximum) - current, maximum);
     }
 
     _appKey() {

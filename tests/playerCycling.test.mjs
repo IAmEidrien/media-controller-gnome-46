@@ -6,11 +6,11 @@ import vm from 'node:vm';
 const source = readFileSync(new URL('../mpris.js', import.meta.url), 'utf8')
     .replace(/^import[\s\S]*?;\s*$/gm, '')
     .replace(/export (?=(const|class|function)\b)/g, '');
-const {MprisManager} = vm.runInNewContext(`(() => {
-    ${source}; return {MprisManager};
+const {MprisManager, MprisPlayer} = vm.runInNewContext(`(() => {
+    ${source}; return {MprisManager, MprisPlayer};
 })()`, {
     GObject: {Object: class {}, TYPE_INT64: 0, registerClass: (...args) => args.at(-1)},
-    Gio: {}, GLib: {},
+    Gio: {}, GLib: {}, PlayerKind: {BROWSER: 'browser'},
 });
 
 function fixture() {
@@ -153,4 +153,20 @@ test('yielding exclusive playback tracks status without pauses or replaying miss
     video.status = 'Paused'; manager._noteStatus(video);
     video.status = 'Playing'; manager._noteStatus(video);
     assert.equal(music.pauses, 1, 'future starts use the restored preference');
+});
+
+test('MPRIS volume uses the normal cap by default and accepts an amplified cap from the card', () => {
+    const player = Object.create(MprisPlayer.prototype);
+    player._playerProxy = {CanControl: true, Volume: 0.5};
+    player._resolveApp = () => ({kind: 'music'});
+    player.setVolume(1.4);
+    assert.equal(player.volume, 1);
+    player.setVolume(1.4, 1.5);
+    assert.equal(player.volume, 1.4);
+    player.setVolume(2, 1.5);
+    assert.equal(player.volume, 1.5);
+    player.setVolume(1, NaN);
+    assert.equal(player.volume, 1.5);
+    player.setVolume(-0.5, 1.5);
+    assert.equal(player.volume, 0);
 });
