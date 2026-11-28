@@ -155,6 +155,8 @@ function fixture() {
         Clutter: {Orientation: {HORIZONTAL: 0, VERTICAL: 1}, ActorAlign: {CENTER: 0, START: 1, END: 2},
             EventType: {BUTTON_PRESS: 1, TOUCH_BEGIN: 2, BUTTON_RELEASE: 3, SCROLL: 4},
             ScrollDirection: {UP: 0, DOWN: 1, LEFT: 2, RIGHT: 3, SMOOTH: 4},
+            ScrollFinishFlags: {VERTICAL: 2},
+            EventFlags: {FLAG_POINTER_EMULATED: 1 << 5},
             BUTTON_PRIMARY: 1, BUTTON_MIDDLE: 2, BUTTON_SECONDARY: 3,
             EVENT_PROPAGATE: 0, EVENT_STOP: 1,
             BinLayout: class {}, FixedLayout: class {}, AnimationMode: {LINEAR: 0}},
@@ -844,49 +846,117 @@ test('hiding GNOME 46 media controls restores the original section predicate', (
     assert.equal(Object.hasOwn(section, '_shouldShow'), false);
 });
 
-test('scrolling the card player button cycles sources with the list closed', () => {
+function pickerScrollFixture() {
     const f = fixture();
     const card = f.indicator._card;
     const button = card._pickerButton;
-    const players = [
-        Object.assign(new Signals(), {busName: 'alpha', displayName: 'Alpha'}),
-        Object.assign(new Signals(), {busName: 'beta', displayName: 'Beta'}),
-    ];
+    const players = ['Alpha', 'Beta', 'Gamma', 'Delta'].map(name =>
+        Object.assign(new Signals(), {busName: name, displayName: name}));
     const cycles = [];
     let index = 0;
-    const {ScrollDirection, EVENT_PROPAGATE, EVENT_STOP} = f.api.Clutter;
+    let time = 0;
+    const {ScrollDirection, ScrollFinishFlags, EventFlags} = f.api.Clutter;
+    f.api.GLib.get_monotonic_time = () => time;
     f.indicator.menu.isOpen = true;
-    card.setPlayers(players, players[index]);
-    f.manager.cyclePlayer = direction => {
-        cycles.push(direction);
-        index = (index + players.length + direction) % players.length;
+    const select = next => {
+        index = next;
         card.setPlayers(players, players[index]);
     };
+    select(index);
+    f.manager.cyclePlayer = direction => {
+        cycles.push(direction);
+        select((index + players.length + direction) % players.length);
+    };
     const handler = [...button.listeners.values()].find(l => l.name === 'scroll-event');
-    const scroll = (direction, dx = 0, dy = 0) =>
+    const scroll = (direction, {dx = 0, dy = 0, emulated = false, finish = 0} = {}) =>
         handler.callback(button, {
             get_scroll_direction: () => direction,
             get_scroll_delta: () => [dx, dy],
+            get_flags: () => emulated ? EventFlags.FLAG_POINTER_EMULATED : 0,
+            get_scroll_finish_flags: () => finish,
         });
+    return {
+        ...f, card, button, players, cycles, select, scroll, ScrollDirection, ScrollFinishFlags,
+        advance: ms => { time += ms * 1000; },
+    };
+}
 
-    assert.equal(scroll(ScrollDirection.DOWN), EVENT_STOP);
-    assert.equal(card._pickerLabel.text, 'Beta');
-    assert.equal(scroll(ScrollDirection.UP), EVENT_STOP);
-    assert.equal(card._pickerLabel.text, 'Alpha');
-    assert.equal(scroll(ScrollDirection.SMOOTH, 1, 0.5), EVENT_PROPAGATE);
+test('each real wheel notch selects exactly one source despite its Wayland smooth copy', () => {
+    const f = pickerScrollFixture();
+    const {card, scroll, cycles, ScrollDirection: D} = f;
+    const wheel = direction => {
+        const dy = direction === D.DOWN ? 1 : -1;
+        assert.equal(scroll(D.SMOOTH, {dy, emulated: true}), f.api.Clutter.EVENT_STOP);
+        const previous = cycles.length;
+        assert.equal(scroll(direction), f.api.Clutter.EVENT_STOP);
+        assert.equal(cycles.length, previous + 1);
+    };
 
-    scroll(ScrollDirection.SMOOTH, 0, 0.75);
-    button.emit('leave-event');
-    scroll(ScrollDirection.SMOOTH, 0, 0.25);
-    assert.deepEqual(cycles, [1, -1]);
-    scroll(ScrollDirection.SMOOTH, 0, 0.75);
-    assert.deepEqual(cycles, [1, -1, 1]);
+    wheel(D.DOWN);
     assert.equal(card._pickerLabel.text, 'Beta');
+    wheel(D.DOWN);
+    assert.equal(card._pickerLabel.text, 'Gamma', 'fast notches count separately');
+    wheel(D.UP);
+    assert.equal(card._pickerLabel.text, 'Beta');
+    wheel(D.UP);
+    wheel(D.UP);
+    assert.equal(card._pickerLabel.text, 'Delta', 'the shared order wraps');
+    assert.deepEqual(cycles, [1, 1, -1, -1, -1]);
     assert.ok(!card._popup);
     assert.equal(card._playerList.opacity, 0);
     assert.equal(f.indicator.menu.isOpen, true);
 
-    card.setPlayers([players[0]], players[0]);
-    assert.equal(scroll(ScrollDirection.DOWN), EVENT_PROPAGATE);
-    assert.deepEqual(cycles, [1, -1, 1]);
+    card.setPlayers([f.players[0]], f.players[0]);
+    assert.equal(scroll(D.DOWN), f.api.Clutter.EVENT_PROPAGATE);
+    assert.equal(cycles.length, 5);
+});
+
+test('touchpad scroll drops duplicate packets and excess steps without losing valid fractions', () => {
+    const f = pickerScrollFixture();
+    const {scroll, cycles, ScrollDirection: D} = f;
+    assert.equal(scroll(D.SMOOTH, {dx: 2, dy: 0.5}), f.api.Clutter.EVENT_PROPAGATE);
+
+    scroll(D.SMOOTH, {dy: 0.75});
+    scroll(D.DOWN, {emulated: true});
+    assert.deepEqual(cycles, []);
+    scroll(D.SMOOTH, {dy: 0.5});
+    scroll(D.DOWN, {emulated: true});
+    assert.deepEqual(cycles, [1]);
+
+    f.advance(150);
+    scroll(D.SMOOTH, {dy: 0.75});
+    assert.deepEqual(cycles, [1, 1], 'fraction survives the selection it caused');
+    f.advance(150);
+    scroll(D.SMOOTH, {dy: 9});
+    scroll(D.SMOOTH, {dy: 4});
+    f.advance(20);
+    scroll(D.SMOOTH, {dy: 2});
+    assert.deepEqual(cycles, [1, 1, 1], 'large deltas and closely spaced updates cannot skip');
+
+    // Real notches and a deliberate trackpad reversal are not rate-limited.
+    scroll(D.UP);
+    scroll(D.SMOOTH, {dy: -1});
+    scroll(D.SMOOTH, {dy: 1});
+    assert.deepEqual(cycles, [1, 1, 1, -1, -1, 1]);
+});
+
+test('ending a touchpad gesture, leaving the button or selecting externally clears its fraction', () => {
+    const f = pickerScrollFixture();
+    const {button, scroll, cycles, ScrollDirection: D, ScrollFinishFlags} = f;
+    for (const reset of [
+        () => scroll(D.SMOOTH, {finish: ScrollFinishFlags.VERTICAL}),
+        () => button.emit('leave-event'),
+        () => f.select(3),
+    ]) {
+        scroll(D.SMOOTH, {dy: 0.75});
+        reset();
+        scroll(D.SMOOTH, {dy: 0.25});
+        assert.deepEqual(cycles, []);
+        button.emit('leave-event');
+    }
+    // A partially accumulated touchpad swipe cannot change a mouse notch.
+    scroll(D.SMOOTH, {dy: 0.75});
+    scroll(D.DOWN);
+    scroll(D.SMOOTH, {dy: 0.25});
+    assert.deepEqual(cycles, [1]);
 });

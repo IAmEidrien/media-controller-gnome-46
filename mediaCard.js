@@ -26,6 +26,7 @@ import {
 } from './transport.js';
 
 const POSITION_POLL_SECONDS = 1;
+const PICKER_REPEAT_INTERVAL_US = 120_000;
 
 /* The title wraps, so the card is as tall as the text needs. Podcast and DJ-set
  * titles can run to hundreds of characters and push the controls off screen;
@@ -347,6 +348,8 @@ export const MediaCard = GObject.registerClass({
     /* The players to offer, in a stable order, and the one on screen. Called
      * on every sync. */
     setPlayers(players, active) {
+        if (!this._cyclingPicker && this._activePlayer?.busName !== active?.busName)
+            this._resetPickerScroll();
         this._players = players;
         this._activePlayer = active;
         this._playerList.setPlayers(players, active?.busName ?? null);
@@ -370,7 +373,7 @@ export const MediaCard = GObject.registerClass({
         setReactive(this._pickerButton, choice);
 
         if (!choice) {
-            this._pickerScrollDelta = 0;
+            this._resetPickerScroll();
             if (this._popup === this._playerPopup)
                 this._closePopup();
         }
@@ -707,40 +710,83 @@ export const MediaCard = GObject.registerClass({
             accessible_name: _('Switch player'),
             child: box,
         });
-        this._pickerScrollDelta = 0;
+        this._resetPickerScroll();
         this._pickerButton.connect('clicked', () => {
-            this._pickerScrollDelta = 0;
+            this._resetPickerScroll();
             this._togglePopup(this._playerPopup);
         });
         this._pickerButton.connect('scroll-event', (_button, event) =>
             this._scrollPicker(event));
         this._pickerButton.connect('leave-event', () => {
-            this._pickerScrollDelta = 0;
+            this._resetPickerScroll();
             return Clutter.EVENT_PROPAGATE;
         });
         this._pickerButton.connect('notify::mapped', () => {
             if (!this._pickerButton.mapped)
-                this._pickerScrollDelta = 0;
+                this._resetPickerScroll();
         });
+    }
+
+    _resetPickerScroll() {
+        this._pickerScrollDelta = 0;
+        this._pickerScrollDirection = 0;
+        this._pickerScrollStepTime = null;
     }
 
     _scrollPicker(event) {
         if (!this._pickerButton.reactive || this._popup)
             return Clutter.EVENT_PROPAGATE;
 
+        const smooth = event.get_scroll_direction() === Clutter.ScrollDirection.SMOOTH;
         const delta = verticalScrollDelta(event);
+
+        /* Wayland wheel notches have an emulated smooth copy. Continuous
+         * scrolling can also come with an emulated discrete copy. */
+        if (event.get_flags() & Clutter.EventFlags.FLAG_POINTER_EMULATED)
+            return delta === 0 ? Clutter.EVENT_PROPAGATE : Clutter.EVENT_STOP;
+
+        if (smooth && (event.get_scroll_finish_flags() & Clutter.ScrollFinishFlags.VERTICAL)) {
+            this._resetPickerScroll();
+            return Clutter.EVENT_PROPAGATE;
+        }
         if (delta === 0)
             return Clutter.EVENT_PROPAGATE;
 
-        if (Math.sign(delta) !== Math.sign(this._pickerScrollDelta))
-            this._pickerScrollDelta = 0;
-        this._pickerScrollDelta += delta;
-        const direction = Math.sign(this._pickerScrollDelta);
-        const steps = Math.trunc(this._pickerScrollDelta + direction * 1e-6);
-        this._pickerScrollDelta -= steps;
-        for (let i = 0; i < Math.abs(steps); i++)
-            this.emit('player-cycle', direction);
+        const direction = Math.sign(delta);
+        if (!smooth) {
+            // A physical notch is independent of touchpad fractions and pacing.
+            this._resetPickerScroll();
+            this._cyclePicker(direction);
+            return Clutter.EVENT_STOP;
+        }
+
+        if (direction !== this._pickerScrollDirection) {
+            this._resetPickerScroll();
+            this._pickerScrollDirection = direction;
+        }
+        this._pickerScrollDelta += Math.abs(delta);
+        const steps = Math.floor(this._pickerScrollDelta + 1e-6);
+        if (steps > 0) {
+            // Keep the fraction but discard excess whole steps. Fast swipes
+            // should never skip players or queue selections for later.
+            this._pickerScrollDelta = Math.max(0, this._pickerScrollDelta - steps);
+            const now = GLib.get_monotonic_time();
+            if (this._pickerScrollStepTime === null ||
+                now - this._pickerScrollStepTime >= PICKER_REPEAT_INTERVAL_US) {
+                this._pickerScrollStepTime = now;
+                this._cyclePicker(direction);
+            }
+        }
         return Clutter.EVENT_STOP;
+    }
+
+    _cyclePicker(direction) {
+        this._cyclingPicker = true;
+        try {
+            this.emit('player-cycle', direction);
+        } finally {
+            this._cyclingPicker = false;
+        }
     }
 
     /* The system's sound output, not the player's: picking one moves every app
