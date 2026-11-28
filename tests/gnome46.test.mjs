@@ -18,6 +18,7 @@ function load(file, names, api) {
 
 class Signals {
     listeners = new Map();
+    blocked = new Set();
     nextId = 1;
     connect(name, callback) {
         const id = this.nextId++;
@@ -27,7 +28,8 @@ class Signals {
     disconnect(id) { assert.ok(this.listeners.delete(id)); }
     emit(name, ...args) {
         for (const listener of [...this.listeners.values()]) {
-            if (listener.name === name) listener.callback(this, ...args);
+            if (listener.name === name && !this.blocked.has(listener))
+                listener.callback(this, ...args);
         }
     }
     connectObject(...args) {
@@ -77,8 +79,8 @@ class Actor extends Signals {
     set_height(height) { this.height = height; }
     get_preferred_height() { return [0, 300]; }
     get_theme_node() { return {get_vertical_padding: () => 0}; }
-    block_signal_handler() {}
-    unblock_signal_handler() {}
+    block_signal_handler(id) { this.blocked.add(this.listeners.get(id)); }
+    unblock_signal_handler(id) { this.blocked.delete(this.listeners.get(id)); }
     show() { this.visible = true; }
     hide() { this.visible = false; }
     set_pivot_point() {}
@@ -126,6 +128,23 @@ function fixture() {
         }
     }
     const settings = new Settings();
+    values['allow-volume-above-100-percent'] = false;
+    const soundSettings = new Settings();
+    class Slider extends Actor {
+        _init(value) {
+            super._init();
+            this.maximum_value = 1;
+            this.value = value;
+        }
+        get value() { return this._value; }
+        set value(value) {
+            const next = Math.max(0, Math.min(value, this.maximum_value));
+            if (next === this._value)
+                return;
+            this._value = next;
+            this.emit('notify::value');
+        }
+    }
     class Menu extends Signals {
         box = new BoxLayout({vertical: true});
         isOpen = false;
@@ -155,27 +174,36 @@ function fixture() {
         Clutter: {Orientation: {HORIZONTAL: 0, VERTICAL: 1}, ActorAlign: {CENTER: 0, START: 1, END: 2},
             EventType: {BUTTON_PRESS: 1, TOUCH_BEGIN: 2, BUTTON_RELEASE: 3, SCROLL: 4},
             ScrollDirection: {UP: 0, DOWN: 1, LEFT: 2, RIGHT: 3, SMOOTH: 4},
+            ScrollFinishFlags: {VERTICAL: 2},
+            EventFlags: {FLAG_POINTER_EMULATED: 1 << 5},
             BUTTON_PRIMARY: 1, BUTTON_MIDDLE: 2, BUTTON_SECONDARY: 3,
             EVENT_PROPAGATE: 0, EVENT_STOP: 1,
             BinLayout: class {}, FixedLayout: class {}, AnimationMode: {LINEAR: 0}},
-        GObject: {registerClass: (...args) => args.at(-1), TYPE_STRING: 0},
+        GObject: {registerClass: (...args) => args.at(-1), TYPE_STRING: 0, TYPE_INT: 1},
         Pango: {EllipsizeMode: {END: 0, NONE: 1}, WrapMode: {WORD_CHAR: 0}},
         // No ButtonRow: it is not part of libadwaita 1.5.
         Adw: {PreferencesPage: Actor, PreferencesGroup: Actor, ActionRow: Actor,
             SwitchRow: Actor, ComboRow: Actor, SpinRow: Actor},
         Gtk: {Button: Actor, Adjustment: Actor, Align: {CENTER: 0},
             StringList: {new: labels => labels}},
-        Gio: {FileIcon: Actor, File: {new_for_uri: () => ({get_parent: () => ({resolve_relative_path: path => path})})}, SettingsBindFlags: {DEFAULT: 0, GET: 1}, FileQueryInfoFlags: {NONE: 0}},
+        Gio: {Settings: class {
+            constructor({schema_id}) {
+                assert.equal(schema_id, 'org.gnome.desktop.sound');
+                return soundSettings;
+            }
+        }, FileIcon: Actor, File: {new_for_uri: () => ({get_parent: () => ({resolve_relative_path: path => path})})}, SettingsBindFlags: {DEFAULT: 0, GET: 1}, FileQueryInfoFlags: {NONE: 0}},
         GLib: {PRIORITY_DEFAULT: 0, get_monotonic_time: () => 0,
             timeout_add: () => 1, timeout_add_seconds: () => 2, Source: {remove() {}}},
         Main: {},
+        Gvc: {MixerControlState: {READY: 1}},
+        PlayerKind: {BROWSER: 'browser'},
         SmartPauseClient: class {
             constructor(changed) { this.changed = changed; api.smartPauseClient = this; }
             destroy() { this.destroyed = true; }
         },
         Extension: class {},
         ExtensionPreferences: class {getSettings() { return settings; }},
-        Slider: Actor,
+        Slider,
         PanelMenu: {Button: PanelButton},
         PopupMenu: {PopupBaseMenuItem: Actor},
         BackdropMaker: class {make() { return Promise.resolve(null); } destroy() {}},
@@ -185,7 +213,7 @@ function fixture() {
         }),
     };
     Object.assign(api, load('transport.js', ['US_PER_SECOND', 'loopIconName', 'nextLoopStatus',
-        'playPauseIconName', 'seekOffset', 'setToggleStyle', 'setReactive', 'syncHover'], api));
+        'playPauseIconName', 'seekOffset', 'setToggleStyle', 'setReactive', 'syncHover', 'verticalScrollDelta', 'volumeIconName'], api));
     Object.assign(api, load('panelActions.js', ['CLICK_ACTIONS', 'activatePanelAction'], api));
     Object.assign(api, load('compat.js', ['boxOrientation'], api));
     Object.assign(api, load('lyricsPanel.js', ['LyricsPanel', 'lyricsIcon'], api));
@@ -195,6 +223,8 @@ function fixture() {
     Object.assign(api, load('cardList.js', ['CardList'], api));
     Object.assign(api, load('playerList.js', ['PlayerList'], api));
     Object.assign(api, load('outputList.js', ['OutputList'], api));
+    Object.assign(api, load('playerVolume.js', ['StreamVolume'], api));
+    Object.assign(api, load('shellMediaControls.js', ['ShellMediaControls'], api));
     Object.assign(api, load('mediaCard.js', ['MediaCard'], api));
     Object.assign(api, load('smartPause.js', ['smartPauseEnabled', 'SmartPauseWatcher', 'SMART_PAUSE_UUID'], api));
     const {MediaIndicator, MediaControlsExtension} = load('extension.js', ['MediaIndicator', 'MediaControlsExtension'], api);
@@ -205,11 +235,18 @@ function fixture() {
     manager.cyclePlayer = () => {};
     manager.selectPlayer = () => {};
     let preferencesOpened = 0;
-    const outputs = Object.assign(new Signals(), {outputs: [], active: null, activeId: null});
+    const mixer = Object.assign(new Signals(), {
+        get_state: () => api.Gvc.MixerControlState.READY,
+        get_sink_inputs: () => mixer.streams,
+        get_vol_max_norm: () => 100,
+        get_vol_max_amplified: () => 150,
+        streams: [],
+    });
+    const outputs = Object.assign(new Signals(), {outputs: [], active: null, activeId: null, mixer});
     const indicator = new MediaIndicator({openPreferences() { preferencesOpened++; }}, settings,
         {resolve: async () => null}, {lookup: async () => null}, manager, outputs);
     return {api, values, settings, indicator, manager, boxes, MediaControlsPreferences, MediaControlsExtension,
-        preferencesOpened: () => preferencesOpened};
+        mixer, soundSettings, preferencesOpened: () => preferencesOpened};
 }
 
 test('output rows retain GNOME 46 accents and selection sends no playback commands', () => {
@@ -407,7 +444,9 @@ test('Panel preferences order, schema choices and dependent symbolic switch stay
     const prefs = new f.MediaControlsPreferences();
     const panel = prefs._panelPage(f.settings);
     assert.deepEqual(panel.children.map(group => group.title),
-        ['Placement', 'Actions', 'Playback controls', 'Track information', 'Scrolling text']);
+        ['Placement', 'Actions', 'Playback controls', 'Notification list',
+            'Track information', 'Scrolling text']);
+    assert.equal(f.values['hide-shell-media-controls'], false);
     const actions = panel.children[1];
     assert.deepEqual(actions.children.map(row => row.title),
         ['Left click', 'Middle click', 'Right click', 'Back button', 'Forward button', 'Scroll up', 'Scroll down']);
@@ -426,7 +465,7 @@ test('Panel preferences order, schema choices and dependent symbolic switch stay
     f.settings.set_string('left-click-action', 'menu');
     assert.equal(actions.children[0].selected, nicks.indexOf('menu'));
 
-    const track = panel.children[3];
+    const track = panel.children.find(group => group.title === 'Track information');
     assert.equal(track.children[0].title, 'Player icon');
     const symbolic = track.children[1];
     assert.equal(symbolic.title, 'Prefer symbolic icons');
@@ -727,7 +766,6 @@ test('new card volume slider follows player capabilities and the fork accent', (
     assert.equal(card._volumeBox.visible, true);
     assert.equal(card._volumeSlider.value, 0.5);
     card._volumeSlider.value = 0.7;
-    card._volumeSlider.emit('notify::value');
     assert.deepEqual(writes, [0.7]);
     card.setAccentColor('rgba(224, 27, 36, 1)');
     assert.match(card._volumeSlider.style, /-barlevel-active-background-color: rgba\(224, 27, 36, 1\)/);
@@ -738,6 +776,52 @@ test('new card volume slider follows player capabilities and the fork accent', (
     assert.equal(card._volumeHoldId, 0);
 });
 
+
+test('card follows the Shell overamplification setting without writing volume on toggle', () => {
+    const f = fixture();
+    const card = f.indicator._card;
+    const slider = card._volumeSlider;
+    const color = 'rgba(224, 27, 36, 1)';
+    const key = 'allow-volume-above-100-percent';
+    const writes = [];
+    const player = Object.assign(new Signals(), {
+        busName: 'player', displayTitle: 'Track', displayName: 'Player', title: 'Track',
+        artist: '', album: '', appIcon: {}, hasAppIcon: true, artUrl: null,
+        length: 0, volume: 1.3, canSetVolume: true, isPlaying: false,
+        getPosition: async () => 0,
+        setVolume: (value, maximum) => writes.push([value, maximum]),
+    });
+    card.setPlayer(player);
+    card.setAccentColor(color);
+    assert.equal(slider.maximum_value, 1);
+    assert.equal(slider.value, 1);
+    assert.equal(slider.has_style_class_name('mc-volume-normal'), true);
+    assert.equal(slider.style, `color: ${color}; -barlevel-active-background-color: ${color};`);
+
+    f.soundSettings.set_boolean(key, true);
+    assert.equal(slider.maximum_value, 1.5);
+    assert.equal(slider.value, 1.3);
+    assert.equal(card._volumeIcon.icon_name, 'audio-volume-overamplified-symbolic');
+    assert.equal(slider.has_style_class_name('mc-volume-normal'), false);
+    assert.equal(slider.style, `-barlevel-active-background-color: ${color};`);
+    assert.equal(card._slider.maximum_value, 1, 'the seek slider does not gain an amplified range');
+    assert.deepEqual(writes, []);
+
+    slider.value = 1;
+    assert.equal(card._volumeIcon.icon_name, 'audio-volume-high-symbolic');
+    slider.value = 1.4;
+    assert.equal(card._volumeIcon.icon_name, 'audio-volume-overamplified-symbolic');
+    f.soundSettings.set_boolean(key, false);
+    assert.equal(slider.maximum_value, 1);
+    assert.equal(slider.value, 1);
+    assert.equal(card._volumeIcon.icon_name, 'audio-volume-high-symbolic');
+    assert.equal(slider.has_style_class_name('mc-volume-normal'), true);
+    assert.equal(card._volumeHoldId, 0);
+    assert.deepEqual(writes, [[1, 1.5], [1.4, 1.5]]);
+
+    card.destroy();
+    assert.equal(f.soundSettings.listeners.size, 0);
+});
 
 test('Smart Pause owns automatic playback while enabled; preferences retain the saved choice', () => {
     const f = fixture();
@@ -778,4 +862,177 @@ test('Smart Pause owns automatic playback while enabled; preferences retain the 
     watcher.destroy();
     watcher.destroy();
     assert.equal(extensions.listeners.size, 0);
+});
+
+test('browser volume follows and releases only the matching audio streams', () => {
+    const f = fixture();
+    const stream = (id, name, volume) => Object.assign(new Signals(), {
+        id, volume, is_muted: false,
+        get_name: () => name,
+        get_icon_name: () => null,
+        set_volume(value) { this.volume = value; return true; },
+        change_is_muted(value) { this.is_muted = value; },
+        push_volume() { this.emit('notify::volume'); },
+    });
+    const browser = stream(1, 'Firefox', 70);
+    const other = stream(2, 'VLC', 60);
+    f.mixer.streams = [browser, other];
+    const card = f.indicator._card;
+    card.setPlayer(Object.assign(new Signals(), {
+        busName: 'org.mpris.MediaPlayer2.firefox', identity: 'Firefox',
+        displayTitle: 'Track', displayName: 'Firefox', title: 'Track',
+        desktopEntry: 'org.mozilla.firefox', kind: f.api.PlayerKind.BROWSER,
+        artist: '', album: '', appIcon: {}, hasAppIcon: true, artUrl: null,
+        length: 0, volume: null, canSetVolume: false, isPlaying: false,
+        getPosition: async () => 0,
+    }));
+    assert.equal(card._volumeBox.visible, true);
+    assert.equal(card._volumeSlider.value, 0.7);
+    f.soundSettings.set_boolean('allow-volume-above-100-percent', true);
+    card._volumeSlider.value = 1.4;
+    assert.equal(browser.volume, 140);
+    assert.equal(other.volume, 60);
+    f.soundSettings.set_boolean('allow-volume-above-100-percent', false);
+    assert.equal(card._volumeSlider.value, 1);
+    assert.equal(browser.volume, 140, 'disabling overamplification does not write a volume');
+    card._volumeSlider.value = 0.3;
+    assert.equal(browser.volume, 30);
+    assert.equal(other.volume, 60);
+    f.mixer.streams = [other];
+    f.mixer.emit('stream-removed', browser.id);
+    assert.equal(card._volumeSlider.reactive, false);
+    assert.equal(card._volumeBox.visible, true);
+    card.destroy();
+    assert.equal(browser.listeners.size, 0);
+    assert.equal(f.mixer.listeners.size, 0);
+});
+
+test('hiding GNOME 46 media controls restores the original section predicate', () => {
+    const {api} = fixture();
+    const prototype = {
+        _shouldShow() { return true; },
+        _sync() { this.visible = this._shouldShow(); },
+    };
+    const section = Object.create(prototype);
+    const controls = new api.ShellMediaControls({_mediaSection: section});
+    controls.setHidden(true);
+    assert.equal(section.visible, false);
+    controls.destroy();
+    assert.equal(section.visible, true);
+    assert.equal(Object.hasOwn(section, '_shouldShow'), false);
+});
+
+function pickerScrollFixture() {
+    const f = fixture();
+    const card = f.indicator._card;
+    const button = card._pickerButton;
+    const players = ['Alpha', 'Beta', 'Gamma', 'Delta'].map(name =>
+        Object.assign(new Signals(), {busName: name, displayName: name}));
+    const cycles = [];
+    let index = 0;
+    let time = 0;
+    const {ScrollDirection, ScrollFinishFlags, EventFlags} = f.api.Clutter;
+    f.api.GLib.get_monotonic_time = () => time;
+    f.indicator.menu.isOpen = true;
+    const select = next => {
+        index = next;
+        card.setPlayers(players, players[index]);
+    };
+    select(index);
+    f.manager.cyclePlayer = direction => {
+        cycles.push(direction);
+        select((index + players.length + direction) % players.length);
+    };
+    const handler = [...button.listeners.values()].find(l => l.name === 'scroll-event');
+    const scroll = (direction, {dx = 0, dy = 0, emulated = false, finish = 0} = {}) =>
+        handler.callback(button, {
+            get_scroll_direction: () => direction,
+            get_scroll_delta: () => [dx, dy],
+            get_flags: () => emulated ? EventFlags.FLAG_POINTER_EMULATED : 0,
+            get_scroll_finish_flags: () => finish,
+        });
+    return {
+        ...f, card, button, players, cycles, select, scroll, ScrollDirection, ScrollFinishFlags,
+        advance: ms => { time += ms * 1000; },
+    };
+}
+
+test('each real wheel notch selects exactly one source despite its Wayland smooth copy', () => {
+    const f = pickerScrollFixture();
+    const {card, scroll, cycles, ScrollDirection: D} = f;
+    const wheel = direction => {
+        const dy = direction === D.DOWN ? 1 : -1;
+        assert.equal(scroll(D.SMOOTH, {dy, emulated: true}), f.api.Clutter.EVENT_STOP);
+        const previous = cycles.length;
+        assert.equal(scroll(direction), f.api.Clutter.EVENT_STOP);
+        assert.equal(cycles.length, previous + 1);
+    };
+
+    wheel(D.DOWN);
+    assert.equal(card._pickerLabel.text, 'Beta');
+    wheel(D.DOWN);
+    assert.equal(card._pickerLabel.text, 'Gamma', 'fast notches count separately');
+    wheel(D.UP);
+    assert.equal(card._pickerLabel.text, 'Beta');
+    wheel(D.UP);
+    wheel(D.UP);
+    assert.equal(card._pickerLabel.text, 'Delta', 'the shared order wraps');
+    assert.deepEqual(cycles, [1, 1, -1, -1, -1]);
+    assert.ok(!card._popup);
+    assert.equal(card._playerList.opacity, 0);
+    assert.equal(f.indicator.menu.isOpen, true);
+
+    card.setPlayers([f.players[0]], f.players[0]);
+    assert.equal(scroll(D.DOWN), f.api.Clutter.EVENT_PROPAGATE);
+    assert.equal(cycles.length, 5);
+});
+
+test('touchpad scroll drops duplicate packets and excess steps without losing valid fractions', () => {
+    const f = pickerScrollFixture();
+    const {scroll, cycles, ScrollDirection: D} = f;
+    assert.equal(scroll(D.SMOOTH, {dx: 2, dy: 0.5}), f.api.Clutter.EVENT_PROPAGATE);
+
+    scroll(D.SMOOTH, {dy: 0.75});
+    scroll(D.DOWN, {emulated: true});
+    assert.deepEqual(cycles, []);
+    scroll(D.SMOOTH, {dy: 0.5});
+    scroll(D.DOWN, {emulated: true});
+    assert.deepEqual(cycles, [1]);
+
+    f.advance(150);
+    scroll(D.SMOOTH, {dy: 0.75});
+    assert.deepEqual(cycles, [1, 1], 'fraction survives the selection it caused');
+    f.advance(150);
+    scroll(D.SMOOTH, {dy: 9});
+    scroll(D.SMOOTH, {dy: 4});
+    f.advance(20);
+    scroll(D.SMOOTH, {dy: 2});
+    assert.deepEqual(cycles, [1, 1, 1], 'large deltas and closely spaced updates cannot skip');
+
+    // Real notches and a deliberate trackpad reversal are not rate-limited.
+    scroll(D.UP);
+    scroll(D.SMOOTH, {dy: -1});
+    scroll(D.SMOOTH, {dy: 1});
+    assert.deepEqual(cycles, [1, 1, 1, -1, -1, 1]);
+});
+
+test('ending a touchpad gesture, leaving the button or selecting externally clears its fraction', () => {
+    const f = pickerScrollFixture();
+    const {button, scroll, cycles, ScrollDirection: D, ScrollFinishFlags} = f;
+    for (const reset of [
+        () => scroll(D.SMOOTH, {finish: ScrollFinishFlags.VERTICAL}),
+        () => button.emit('leave-event'),
+        () => f.select(3),
+    ]) {
+        scroll(D.SMOOTH, {dy: 0.75});
+        reset();
+        scroll(D.SMOOTH, {dy: 0.25});
+        assert.deepEqual(cycles, []);
+        button.emit('leave-event');
+    }
+    // A partially accumulated touchpad swipe cannot change a mouse notch.
+    scroll(D.SMOOTH, {dy: 0.75});
+    scroll(D.DOWN);
+    scroll(D.SMOOTH, {dy: 0.25});
+    assert.deepEqual(cycles, [1]);
 });

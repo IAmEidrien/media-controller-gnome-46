@@ -416,12 +416,16 @@
   height: 18px;
 }
 
-/* :hover is restated, or the theme's .slider:hover turns the thumb white. */
 .mc-card .mc-volume,
 .mc-card .mc-volume:hover {
-  color: #3584e4;
   -barlevel-background-color: rgba(255, 255, 255, 0.1);
   -barlevel-active-background-color: #3584e4;
+}
+
+/* Keep the existing thumb in normal mode and the Shell thumb in overdrive. */
+.mc-card .mc-volume-normal,
+.mc-card .mc-volume-normal:hover {
+  color: #3584e4;
 }
 
 /* ---------- Player and output lists ---------- */

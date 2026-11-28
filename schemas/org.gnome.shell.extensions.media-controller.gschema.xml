@@ -191,6 +191,12 @@
       <summary>Hide the indicator when no player is running</summary>
     </key>
 
+    <key name="hide-shell-media-controls" type="b">
+      <default>false</default>
+      <summary>Hide GNOME's own media controls</summary>
+      <description>Removes the media player GNOME shows in the notification list under the clock, which repeats the panel indicator and the card. GNOME's controls come back when this is turned off or the extension is disabled.</description>
+    </key>
+
     <key name="card-show-art" type="b">
       <default>true</default>
       <summary>Show album art in the card</summary>
@@ -246,7 +252,7 @@
     <key name="card-show-volume" type="b">
       <default>true</default>
       <summary>Show the volume bar in the card</summary>
-      <description>A slider under the playback controls that sets the player's own volume. Only shown for players that let their volume be set over MPRIS, which browsers do not.</description>
+      <description>A slider under the playback controls that sets the volume of the player on screen, not of the whole system: its own volume where it has one, and for browsers, which have none, the volume of their sound stream. A browser's bar is dimmed while it has no sound open.</description>
     </key>
 
     <key name="card-show-output-switcher" type="b">

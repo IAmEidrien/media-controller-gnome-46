@@ -3,6 +3,7 @@
  * menu, which holds the now-playing card. */
 
 import Clutter from 'gi://Clutter';
+import Gio from 'gi://Gio';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 
@@ -19,11 +20,12 @@ import {MediaCard} from './mediaCard.js';
 import {MprisManager} from './mpris.js';
 import {activatePanelAction} from './panelActions.js';
 import {ScrollingLabel} from './scrollingLabel.js';
+import {ShellMediaControls} from './shellMediaControls.js';
 import {SoundOutputs} from './soundOutputs.js';
 import {smartPauseEnabled, SmartPauseWatcher} from './smartPause.js';
 import {UpdateNotice} from './updateNotice.js';
 import {loopIconName, nextLoopStatus, playPauseIconName, seekOffset,
-    setReactive, setToggleStyle} from './transport.js';
+    setReactive, setToggleStyle, verticalScrollDelta} from './transport.js';
 
 const ROLE = 'media-controls';
 // Conventional extra mouse buttons; wheel events remain separate scroll input.
@@ -113,6 +115,8 @@ class MediaIndicator extends PanelMenu.Button {
             /* The menu stays open: you switch players to look at the other one. */
             'player-selected', (_card, busName) =>
                 this._manager.selectPlayer(busName),
+            'player-cycle', (_card, direction) =>
+                this._manager.cyclePlayer(direction),
             /* Switch the system output without issuing playback commands. */
             'output-selected', (_card, id) => {
                 soundOutputs.select(id);
@@ -304,24 +308,9 @@ class MediaIndicator extends PanelMenu.Button {
      * Smooth wheels/trackpads emit fractions of a tick: accumulate them rather
      * than changing volume by 5% for every tiny packet. No timer is needed. */
     _onScroll(event) {
-        let delta;
-        switch (event.get_scroll_direction()) {
-        case Clutter.ScrollDirection.UP:
-            delta = -1;
-            break;
-        case Clutter.ScrollDirection.DOWN:
-            delta = 1;
-            break;
-        case Clutter.ScrollDirection.SMOOTH: {
-            const [dx, dy] = event.get_scroll_delta();
-            if (!Number.isFinite(dy) || dy === 0 || Math.abs(dx) > Math.abs(dy))
-                return Clutter.EVENT_PROPAGATE;
-            delta = dy;
-            break;
-        }
-        default:
+        const delta = verticalScrollDelta(event);
+        if (delta === 0)
             return Clutter.EVENT_PROPAGATE;
-        }
 
         const player = this._manager.activePlayer;
         if (player !== this._scrollPlayer) {
@@ -589,10 +578,17 @@ export default class MediaControlsExtension extends Extension {
         this._indicator.sync();
         this._themeAccent = new ThemeAccent(color => this._indicator.setAccentColor(color));
 
+        /* disable() hands GNOME its own media controls back. */
+        this._shellMedia = new ShellMediaControls(
+            Main.panel.statusArea.dateMenu?._messageList ?? null);
+        this._applyShellMedia();
+
         this._settings.connectObject(
             'changed::panel-position', () => this._reposition(),
             'changed::pause-others-on-play',
-            () => this._applyExclusivePlayback(), this);
+            () => this._applyExclusivePlayback(),
+            'changed::hide-shell-media-controls',
+            () => this._applyShellMedia(), this);
 
         this._updateNotice = new UpdateNotice(this, this._settings);
     }
@@ -608,6 +604,11 @@ export default class MediaControlsExtension extends Extension {
         this._manager.exclusivePlayback =
             this._settings.get_boolean('pause-others-on-play') &&
             !smartPauseEnabled(Main.extensionManager);
+    }
+
+    _applyShellMedia() {
+        this._shellMedia.setHidden(
+            this._settings.get_boolean('hide-shell-media-controls'));
     }
 
     _panelBoxes() {
@@ -651,6 +652,9 @@ export default class MediaControlsExtension extends Extension {
         this._settings.disconnectObject(this);
         this._smartPauseWatcher?.destroy();
         this._smartPauseWatcher = null;
+
+        this._shellMedia?.destroy();
+        this._shellMedia = null;
 
         this._themeAccent?.destroy();
         this._themeAccent = null;

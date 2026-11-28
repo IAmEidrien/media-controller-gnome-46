@@ -212,6 +212,15 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
             _('Cycles between off, the whole queue, and one track. Requires a player that supports looping.')));
         page.add(buttons);
 
+        const shellControls = new Adw.PreferencesGroup({
+            title: _('Notification list'),
+        });
+        shellControls.add(this._switchRow(settings, 'hide-shell-media-controls',
+            _('Hide GNOME media controls'),
+            _('Remove the player GNOME shows in the notification list under the clock, which repeats this indicator and its card. It comes back when this is off or the extension is disabled.')));
+        page.add(shellControls);
+
+
         const text = new Adw.PreferencesGroup({
             title: _('Track information'),
             description: _('What the indicator shows about the current track.'),
@@ -302,7 +311,7 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
             _('Shown at the right edge of the controls. Cycles between off, the whole queue, and one track.')));
         playback.add(this._switchRow(settings, 'card-show-volume',
             _('Volume bar'),
-            _('Shown under the controls. Sets the volume of the player itself, not of the whole system. Requires a player that supports it; browsers do not.')));
+            _('Shown under the controls. Sets the volume of the player itself, not of the whole system. For browsers it works while they play, and is dimmed when they are not.')));
         playback.add(this._switchRow(settings, 'card-show-output-switcher',
             _('Sound output button'),
             _('Shown at the bottom right of the card while more than one output is available, such as speakers and headphones. Switches the output of the whole system, as the sound menu does, so every app moves to it.')));

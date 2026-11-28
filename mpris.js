@@ -457,12 +457,12 @@ export const MprisPlayer = GObject.registerClass({
             this._call('Previous');
     }
 
-    setVolume(volume) {
+    setVolume(volume, maximum = 1) {
         if (!this._playerProxy || !this.canSetVolume ||
-            !Number.isFinite(volume))
+            !Number.isFinite(volume) || !Number.isFinite(maximum) || maximum < 1)
             return;
         try {
-            this._playerProxy.Volume = Math.max(0, Math.min(1, volume));
+            this._playerProxy.Volume = Math.max(0, Math.min(maximum, volume));
         } catch (e) {
             logError('set Volume failed', e);
         }
